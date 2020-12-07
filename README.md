@@ -41,8 +41,9 @@ absolute error can be switched to a percentage error, whereby the error is assum
 However, in testing it was found that the absolute error produces much smoother results, particularly early on in the
 timeseries when the observation values are small.
 The error in the smoothed timeseries is a little more complex, but can be understood as the value by which the timeseries
-should not change by more than for one timestep to the next. This is set to vary depending on the magnitude of each value.
-If the values at a part of the timeseries are small, then this error is smaller, and thus the smoothing constraint is
+should not change by more than for one timestep to the next. This is set to vary depending on the magnitude of each value in the
+modelled GAI.
+If the values at a part of the modelled GAI timeseries are small, then this error is smaller, and thus the smoothing constraint is
 stronger for this part of the timeseries, and vice versa.
 Other controls on the strength of the smoothing constraint exist. These are power and order.
 Power controls the overall strength of the constraint throughout the timeseries, so the higher this is, the smoother
@@ -58,16 +59,16 @@ Data to be provided by the user
 The meteorological data used to drive the model must be provided by the user in a specific format. The code has been designed
 to work with UKCP18 data, but in theory any meteorological driving data can be used, provided it meets the format requirements.
 Note though, that this has not been tested. Future versions of the code will remove these stringent restrictions.
-The daily variables required are total precipitation in mm (pr), maximum 2m temperature in degC (tasmax),
+ - The daily variables required are total precipitation in mm (pr), maximum 2m temperature in degC (tasmax),
 minimum 2m temperature in degC (tasmin), average net surface longwave radiation in W/m^2 (rls), 
 average net surface shortwave radiation in W/m^2 (rss), average 2m temperature in degC (tas).
-The filenames must contain the variable names in brackets, which must also be the names of the variables within the netCDF files.
-The end of each filename must also be written _nn_startdate_enddate.nc with startdate and enddate formatted yyyymmdd. 
+ - The filenames must contain the variable names in brackets, which must also be the variable names within the netCDF files.
+ - The end of each filename must also be written _nn_startdate_enddate.nc with startdate and enddate formatted yyyymmdd. 
 nn is ensemble number, but can be any string. 
-The data must also be on an x,y grid where x and y and OSGB eastings and northings. The variable names of the x and y
+- The data must also be on an x,y grid where x and y are OSGB eastings and northings. The variable names of the x and y
 variables must be projection_x_coordinate and projection_y_coordinate. 
-The data must be on a 360day calendar.
-Finally, the data must contain a variable named, literally, yyyymmdd, which contains the yyyymmdd strings for each timestep
+- The data must be on a 360day calendar.
+- Finally, the data must contain a variable named, literally, yyyymmdd, which contains the yyyymmdd strings for each timestep
 in the datefile. 
 
 If you wish to verify the yield produced by the assimilation, you will need to set the verify switch to 1 and 
@@ -91,6 +92,7 @@ To run from the script:
 - Load the anaconda environment as below
 - Load ipython (or just python, but ipython looks nicer!) from the directory with the script in
 - Then type 'run wrapper.py'
+
 To run from the notebook:
 - Load the anaconda environment as below
 - Run 'jupyter notebook assimilation.ipynb' in the directory containing this ipynb file. This will open up a web browser
@@ -99,11 +101,12 @@ To run from the notebook:
 - Change the user-editable variables in the next code cell as necessary and run it
 - Run the main code in the cell below
 
-The code is set up to run for the x,y coordinates specified by the obscoords variable, for a single year, for each UKCP18 ensemble
-member. The first time it is run it will download the required MODIS LAI data for assimilation. After this, if the xy coords have
-not been changed, the obs switch can be set to 2, so that it uses what is already downloaded. 
+The code is set up to run for the x,y coordinates specified by the obscoords variable, for a single year or multiple years,
+for each UKCP18 ensemble member. The first time it is run it will download the required MODIS LAI data for assimilation.
+After this, if the xy coords and years have not been changed, the obs switch can be set to 2, so that it uses what is already
+downloaded. 
 The first time it is run it will also format the netcdf UKCP18 data into an R datacube format. Future times it is run,
-the genRdata switch can be set to 0. In future versions of the code, it will be changed to use the netCDF data directly. 
+the genRdata switch can be set to 0. In future versions of the code, it will be changed to use the netCDF data directly.
 
 The final output of the code will be the original, modelled yield and the updated, assimilated yield in xarray datasets,
 which are similar in structure to netcdf files. The data will also be saved on disk as netcdf files. The datasets will
@@ -119,7 +122,7 @@ Anaconda installation instructions
 To install anaconda and my python/R packages:
 
 1. Download anaconda from https://www.anaconda.com
-You want the python 3.7, 64bit (x86) installer for linux.
+You want a python>=3.7, 64bit (x86) installer for linux.
 As of 08/06/2020 this can be obtained by running: wget https://repo.anaconda.com/archive/Anaconda3-2020.02-Linux-x86_64.sh
 But note that the link to the most up to date version will likely change, so don't rely on this.
 
@@ -136,7 +139,7 @@ Obtain the full path to your home directory by running pwd in your home director
 
 5. Setup a 'DAenv' environment that contains all the modules you need to run my scripts,
 using the conda_env_file_DAenv.txt. (You can change the name if you want). 
-In your home directory run 'bash' if you are not already using the bash shell (by default ceh uses the csh shell)
+In your home directory run 'bash' if you are not already using the bash shell (by default UKCEH uses the csh shell)
 Then conda create --name DAenv --file conda_env_file_DAenv.txt (after copying the txt file to your home dir).
 
 6. Run 'source activate DAenv' to load this environment, and you should be good to go.
