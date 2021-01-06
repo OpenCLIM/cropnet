@@ -1,30 +1,12 @@
 import sys
-sys.path.insert(1, '/users/sgsys/matbro/cropNET/code')
 from utils import *
-#import sys
-#import time
-#import requests
-#import urllib.request
+from MODIS import *
 import warnings
 warnings.filterwarnings('ignore')
-#import rpy2.robjects as robjects
-#from rpy2.robjects.packages import importr
-#import rpy2.robjects.packages as rpackages
-#from rpy2.robjects.vectors import StrVector
 from rpy2.robjects import numpy2ri
 import numpy as np
 import xarray as xr
-#import matplotlib.pyplot as plt
-#import scipy.optimize as spo
-#import datetime as dt
 import pandas as pd
-#import geopandas as gpd
-#import pyproj
-#import netCDF4 as nc4
-#import cftime as cft
-#import os
-#import glob
-#import shutil
 numpy2ri.activate()
 #from memory_profiler import profile
 
@@ -34,35 +16,38 @@ numpy2ri.activate()
 #
 ##################################################################################
 
-# UKCP18 ensemble members to use. Note that '02', '03' and '14' don't exist.
-# Note that because the error in the modelled value is based on the ensemble
-# spread, reducing the number of ensemble members used will result in the
-# assimilated/optimum GAI being closer to the original modelled GAI.
-# To counteract this, change the moderrinfl variable below. You may need to
-# experiment a bit to get the results you want!
-ensmems = ['01', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '15']
+# name of crop and dataset name to use
+# names of alternative precipitation and radiation datasets to use
+# set to 'None' to use the precip and radiation from the main dataset
+crop = 'wheat'
+datasetname = 'ukcp18'
+precname = 'None'
+radname = 'None'
 
-# years to run for, from the first specified year to the year before the second
-years = np.arange(2016, 2020)
+# location of the driving data netcdf files. Must encompass the time range specified 
+dataloc = "/data/UKCP18/RCM_12km/daily_timeseries/downloaded_data/**/*.nc"
 
-# location of the R-formatted driving data                                                                                    
-# If this needs to be generated set 'genRdata' to 1. This will take a few hours,
-# and will use the UKCP18 data in UKCP18dir. 
-# The UKCP18 data must follow a certain format at the moment, see README for details.
-Rdatpath = '/users/sgsys/matbro/cropNET/data/wheat_driving'
-# location of UKCP18 netcdf files. Must encompass the range specified by years,
-# plus a year in front if the growing season does not start on 1st Jan
-UKCP18dir = '/data/UKCP18/RCM_12km/daily_timeseries/downloaded_data'
-genRdata = 0
+# names of the driving data variables to use
+varnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
+
+# location and filename of elevation data
+# only used for grass crop currently
+elevfile = 'None'
 
 # location and filename of the csv file containing the CO2 concentration projections
 CO2file = '/users/sgsys/matbro/cropNET/data/UKCP18_CO2_RCP85.csv'
 
-# location to save outputted yields in
-saveloc = '/users/sgsys/matbro/cropNET/outputs/'
+# location and filename of the AWC data
+AWCrast = "/users/sgsys/matbro/cropNET/data/MaxWet1.tif"
+
+# location to save outputted yields in                                                                                       
+yieldsaveloc = '/users/sgsys/matbro/cropNET/outputs/'
+
+# where to store the formatted driving data
+saveloc = '/users/sgsys/matbro/cropNET/driving_datafiles'
 
 # switch controlling plotting of outputs.
-# may not work outside of a jupyter notebook example...
+# may not work outside of a jupyter notebook...
 # 0: no plots, 1: 1 plot containing the timeseries at each iteration, 
 # 2: 2 plots, one showing the value of the cost function at each iteration 
 plot = 0
@@ -75,7 +60,6 @@ interval = 50
 # Ignored if plot==0.
 plotdir = 'None'
 
-
 # verify switch. If set to 1, the code will run for all the locations for which we
 # have precision yield data, and produce plots comparing the original modelled
 # yield to that after assimilation. The yield data is read in from the
@@ -85,11 +69,10 @@ plotdir = 'None'
 # run for in howmanyobs below.
 verify = 0
 howmanyobs = -1 # set to -1 for all
-yieldfile='/users/sgsys/matbro/data/cropyield/Mean_wheat_yields_v2/mean_wheat_yields_OSGB.shp'
+yieldshapefile='/users/sgsys/matbro/data/cropyield/Mean_wheat_yields_v2/mean_wheat_yields_OSGB.shp'
 
-# obs switch. Set to 1 to download MODIS LAI, 2 to use already downloaded data,
-# otherwise fake obs will be generated, options 0 and 1 use the obscoords specified below
-# unless verify==1
+# obs switch. Set to 1 to download MODIS LAI, 2 to use already downloaded data,                                               
+# option 1 uses the coords specified below
 obs = 1
 
 # directory containing MODIS LAI data, or data to download it to
@@ -102,11 +85,30 @@ MODISdir = '/users/sgsys/matbro/cropNET/data/MODIS/test'
 # Coordinates to run over. Alternatively, a csv file with one x,y coord per line can
 # be specfied in coordsfile. Set coordsfile to None to use obscoords.
 # Both ignored if verify==1
-#             x     , y
-obscoords = [[580000, 300000], # E Anglia
-             [460000, 420000], # C. Eng
-             [260000,  90000]] # SW. Eng
+#          x     , y
+coords = [[580000, 300000], # E Anglia
+          [460000, 420000], # C. Eng
+          [260000,  90000]] # SW. Eng
 coordsfile = None
+
+# UKCP18 ensemble members to use. Note that '02', '03' and '14' don't exist.
+# Note that because the error in the modelled value is based on the ensemble
+# spread, reducing the number of ensemble members used will result in the
+# assimilated/optimum GAI being closer to the original modelled GAI.
+# To counteract this, change the moderrinfl variable below. You may need to
+# experiment a bit to get the results you want!
+ensmems = ['01', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '15']
+
+# timespan to run for. 
+# If the timespan spans more than 1 whole year,
+# the end of the timespan will be chopped off to
+# make a whole number of years.
+startyear = 2014
+startmonth = 10
+startday = 1
+endyear = 2018
+endmonth = 10
+endday = 1
 
 # Assimilation controls:
 obserrtype = 0 # if 1, obsstd = obs*obserr for each tstep (relative)
@@ -132,51 +134,91 @@ power=10
 ##########################################################################################
 
 r['source']('Lynch_potpredict_v2_MJB.R')
-fddw = r['formatdrivingdatawheat']
-loaddata = r['loaddata']
 #GAIfunc = r['GAI']
 GAIfunc_point = r['GAI_point']
 
-if genRdata == 1:
-    fddw(UKCP18dir, Rdatpath, 'projection_x_coordinate', 'projection_y_coordinate')
-
 # use yield shape file to generate locations to request MODIS data for if verify mode
 if verify==1 and obs==1:
-    datacodes = MODIS_request(yieldfile, obscoords, years[0]-1, years[-1], MODIScode='MCD15A2H')
+    datacodes = MODIS_request(yieldshapefile, coords, startyear, endyear, MODIScode='MCD15A2H')
     MODIS_download(MODISdir, datacodes, product_name='Lai_500m')
 
 # otherwise use provided x,y coords
 if verify==0 and obs==1:
-    datacodes = MODIS_request(coordsfile, obscoords, years[0]-1, years[-1], MODIScode='MCD15A2H')
+    datacodes = MODIS_request(coordsfile, coords, startyear, endyear, MODIScode='MCD15A2H')
     MODIS_download(MODISdir, datacodes, product_name='Lai_500m')
 
-if obs==0:
-    obspdall = fakeobsgen(obscoords, moddata)
-else:
-    obspdall, obscoords = MODIS_process(os.path.join(MODISdir, '*.csv*'))
+print('Processing obs')
+obspdall, coords = MODIS_process(os.path.join(MODISdir, '*.csv*'))
 
 if verify==1:
-    #obspdall = obspdall.iloc[:, :howmanyobs]
-    #obscoords = obscoords[:howmanyobs]
     obspdall = obspdall.iloc[:, :howmanyobs]
-    obscoords = obscoords[:howmanyobs]
+    coords = coords[:howmanyobs]
+
+if startyear == endyear:
+    years = [startyear]
+elif endyear > startyear+1:
+    if endmonth < startmonth:
+        years = list(np.arange(startyear+1, endyear+1))[:-1]
+    elif endmonth==startmonth and endday < startday:
+        years = list(np.arange(startyear+1, endyear+1))[:-1]
+    else:
+        years = list(np.arange(startyear+1, endyear+1))
+else:
+    years = list(np.arange(startyear+1, endyear+1))
+
+startmonthstr = '{:02.0f}'.format(startmonth)
+startdaystr = '{:02.0f}'.format(startday)
+endmonthstr = '{:02.0f}'.format(endmonth)
+enddaystr = '{:02.0f}'.format(endday)
 
 cfyears_vari = []
 # create xr datasets to store data
 ensmemsint = [int(ensmem) for ensmem in ensmems]
 oldyields_dict = {}
 newyields_dict = {}
-for tob in obscoords:
+for tob in coords:
     oldyields_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), len(years))), coords=[ensmemsint, years], dims=['ensmem', 'year'])
     newyields_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), len(years))), coords=[ensmemsint, years], dims=['ensmem', 'year'])
 oldyields_vari = xr.Dataset(oldyields_dict)
 newyields_vari = xr.Dataset(newyields_dict)
-for year in years:
 
+for year in years:
     # extract out a year's worth of obs
-    gyeardates = xr.cftime_range(str(year-1)+'-10-01', str(year)+'-09-30', calendar='360_day', freq='D', name='date').values
-    obspd = obspdall.loc[gyeardates]
+    # TODO adapt to handle non-360day calendars
+    # can use days_in_month code from PET project
+    if startyear==endyear:
+        gyeardates = xr.cftime_range(str(year) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + endmonthstr + '-' + enddaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+    elif len(years)==1 and endmonth < startmonth:
+        gyeardates = xr.cftime_range(str(year-1) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + endmonthstr + '-' + enddaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+    elif len(years)==1 and endmonth > startmonth:
+        gyeardates = xr.cftime_range(str(year-1) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + startmonthstr + '-' + startdaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+    elif len(years)==1 and endday < startday:
+        gyeardates = xr.cftime_range(str(year-1) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + endmonthstr + '-' + enddaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+    elif len(years)==1 and endday >= startday:
+        gyeardates = xr.cftime_range(str(year-1) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + startmonthstr + '-' + startdaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+    else:
+        gyeardates = xr.cftime_range(str(year-1) + '-' + startmonthstr + '-' + startdaystr, 
+                                     str(year) + '-' + startmonthstr + '-' + startdaystr, 
+                                     calendar='360_day', freq='D', name='date').values
+
+    print('Running for ' + str(gyeardates[0]) + ' to ' + str(gyeardates[-1]))
     
+    try:
+        obspd = obspdall.loc[gyeardates]
+    except KeyError:
+        print('Required times not present in downloaded MODIS data, re-run code with obs=1 to download')
+    times = np.array([str(t.year)+'{:02.0f}'.format(t.month)+'{:02.0f}'.format(t.day) for t in list(gyeardates)])    
+
     if plotdir != 'None':
         if not os.path.exists(plotdir):
             os.makedirs(plotdir)
@@ -184,14 +226,16 @@ for year in years:
     GAI_p_all, GAI_p_ensmean, GAI_p_ensstd, \
     tmean_p_all, prec_p_all, solarrad_p_all, \
     Jarray_p_all, Cday_p_all, GSS_p_all, \
-    HarvestJday, AWC_allp, temp_cconc = ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords)
+    HarvestJday, AWC_allp, CDD, TT, temp_cconc = \
+    ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, 
+                 dataloc, saveloc, AWCrast, elevfile, CO2file)
 
     # now we've done the ensgen, do the assimilation
     cfxrs_vari = []
     for ensmem in ensmems:
         print('Doing DA for GAI using variational method for ensmem ' + ensmem)
         mergedall_vari, cfall_vari = vari_method_point(obspd, GAI_p_all.sel(ensmem=int(ensmem)), GAI_p_ensstd, 
-                                                       obscoords, year, ensmem, obserrtype, obserr, moderrinfl,
+                                                       coords, year, ensmem, obserrtype, obserr, moderrinfl,
                                                        tsvar, order, power, plot, plotdir, interval)
 
         cfxr_vari = cfall_vari.to_xarray()
@@ -200,15 +244,15 @@ for year in years:
         cfxr_vari = xr.where(np.isinf(cfxr_vari), np.nan, cfxr_vari) # set infs as nans
         cfxrs_vari.append(cfxr_vari)
 
-        oldyields, newyields = update_yield_points_point(GAI_p_all.sel(ensmem=int(ensmem)), mergedall_vari, obscoords, 
+        oldyields, newyields = update_yield_points_point(GAI_p_all.sel(ensmem=int(ensmem)), mergedall_vari, coords, 
                                          tmean_p_all.sel(ensmem=int(ensmem)), prec_p_all.sel(ensmem=int(ensmem)), 
                                          solarrad_p_all.sel(ensmem=int(ensmem)), Jarray_p_all.sel(ensmem=int(ensmem)), 
                                          Cday_p_all.sel(ensmem=int(ensmem)), GSS_p_all.sel(ensmem=int(ensmem)), 
-                                         HarvestJday, AWC_allp, temp_cconc, ensmem)
+                                         HarvestJday, AWC_allp, CDD, TT, temp_cconc, ensmem)
 
         del mergedall_vari
         counter=0
-        for tob in obscoords:
+        for tob in coords:
             oldyields_vari[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem), year=year)] = oldyields[counter]
             newyields_vari[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem), year=year)] = newyields[counter]
             counter+=1
@@ -216,12 +260,14 @@ for year in years:
     cfallensmems_vari = xr.concat(cfxrs_vari, dim='ensmem')
     cfyears_vari.append(cfallensmems_vari)
 
-print('Calculating climatological conversion factor using years: ' + str(years) + '\n')
-cfallyears_vari = xr.concat(cfyears_vari, dim='date')
-del cfyears_vari
-cfensmean_vari = cfallyears_vari.mean(dim='ensmem')
-del cfallyears_vari
-cfclim_vari = cfensmean_vari.groupby('date.dayofyear').mean().roll(dayofyear=-270, roll_coords=True)
+if len(years) > 1:
+    print('Calculating climatological conversion factor using years: ' + str(years) + '\n')
+    cfallyears_vari = xr.concat(cfyears_vari, dim='date')
+    del cfyears_vari
+    cfensmean_vari = cfallyears_vari.mean(dim='ensmem')
+    del cfallyears_vari
+    dayroll = -1*(startmonth*30 + startday-1)
+    cfclim_vari = cfensmean_vari.groupby('date.dayofyear').mean().roll(dayofyear=dayroll, roll_coords=True)
 
 print('Saving to netcdf')
 if not os.path.exists(saveloc):
@@ -232,7 +278,8 @@ newyieldfile = os.path.join(saveloc, now + '_newyield.nc')
 cfclimfile   = os.path.join(saveloc, now + '_cfclimo.nc')
 oldyields_vari.to_netcdf(oldyieldfile)
 newyields_vari.to_netcdf(newyieldfile)
-cfclim_vari.to_netcdf(cfclimfile)
+if len(years) > 1:
+    cfclim_vari.to_netcdf(cfclimfile)
 
 if verify==1:
-    verifyyield(yieldfile, obscoords, oldyields_vari, newyields_vari, years, saveloc)
+    verifyyield(yieldfile, coords, oldyields_vari, newyields_vari, years, yieldsaveloc)

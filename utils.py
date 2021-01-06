@@ -4,35 +4,31 @@ from rpy2.robjects.packages import importr
 import rpy2.robjects.packages as rpackages
 from rpy2.robjects.vectors import StrVector
 from rpy2.robjects import numpy2ri
+from download_era5 import *
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 20})
 import scipy.optimize as spo
+from cdo import *
 #import cartopy as cp
 import datetime as dt
 import pandas as pd
 import pyproj
 import geopandas as gpd
-#from rasterio import features
-#from affine import Affine
+from rasterio import features
+from affine import Affine
 #from dateutil.relativedelta import relativedelta
 import netCDF4 as nc4
 import cftime as cft
 import os
 import shutil
 import glob
-import time
-import requests
-import urllib.request
-#import warnings
-#warnings.filterwarnings.ignore()
 from IPython import display
 numpy2ri.activate()
 #import csv
 #import shapefile
 #from shapely.geometry import Polygon, MultiPolygon, Point, MultiPoint, shape
-#from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, ProgressBar, visualize
+from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, ProgressBar, visualize
 #from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 #import matplotlib.animation as animation
 
@@ -40,229 +36,558 @@ numpy2ri.activate()
 raster = importr('raster')
 rgdal = importr('rgdal')
 rgeos = importr('rgeos')
-geosphere = importr('geosphere')
+ncdf4 = importr('ncdf4')
 abind = importr('abind')
-datatable = importr('data.table')
+Evapotranspiration = importr('Evapotranspiration')
 r = robjects.r
-r['source']('Lynch_potpredict_v2_MJB.R') # define R functions
+r['source']('Grass_potpredict_MJB.R') # define R functions
+r['source']('Lynch_potpredict_v2_MJB.R')
 
+def load_driving_data(basedatasetname, times,
+                      dataloc, saveloc, simx, crop, AWCrast='None', CO2file='None',
+                      lonmin=0, lonmax=0, latmin=0, latmax=0, downloaddata=0,
+                      mask=0, sfname='ne_10m_admin_0_countries.shp', countries=['China'],
+                      cropmask=0, cmfile=None, cropthresh=0, irrmask=0, irrfile=None,
+                      precipname='None', radname='None'):
 
-def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H'):
     '''
-    Submit requests to the MODIS data servers to download data from
-    modis.ornl.gov for the centre point of each of the fields we have 
-    yield data for, or provided coordinates.
-    A maximum of 100 requests can be submitted per email address per day,
-    but this can be ignored by using different, fake, email addresses.
-    Several email addresses are written in the 'emails' variable list
-    below. Just add some more nonsense ones if you need more, substituting
-    %40 for @
-
+    Read in the various data files and merge them into a single
+    netcdf file on the same grid, apply masking and load 
+    ancillary data files. 
     Inputs:
-    infile: Location of file containing the shapes of the fields 
-            we have yield data for, or a csv file containing x,y coords,
-            or None
-    obscoordsin: List of of 2-element lists containing x,y coords
-    startyear: First year you want to download data for
-    endyear: Last year you want to download data for
-    MODIScode: Product code of MODIS product you want
+    basedatasetname: Which driving dataset we're using
+    times: 1D np array that defines the time period that the data will be cut down to
+    dataloc: Directory containing all the data files
+    saveloc: Where to output the single netcdf file containing all the variables
+    simx: Only used for ukcp18 data, to identify the ensemble member used
+    crop: Which crop to load data for
+    AWCrast: Location of the AWC dataset used for wheat crops. Defaults to 'None'.
+    CO2file: Location of csv file containing yearly CO2 concentrations. Defaults to 'None'.
+    lonmin, lonmax, latmin, latmax: Region to download if downloaddata==1. All default to 0.
+    downloaddata: Switch to control whether the basedataset is downloaded
+                  or not. Currently only works for era5. Defaults to 0 (off).
+    mask: Switch to enable masking of data by country. Defaults to 0 (off).
+    sfname: The location of the shapefile containing at least the countries 
+            to mask to. Defaults to one in current directory. 
+    countries: List of countries to mask for. Defaults to China. 
+    cropmask: Switch controlling masking based on crop. Defaults to 0 (off).
+    cmfile: Location of dataset defining location of crop for masking. Defaults to None.
+    cropthresh: Threshold in cmfile to use for masking. Defaults to 0.
+    irrmask: Switch controlling whether to account for irrigation or not.
+             Defaults to 0 (off).
+    irrfile: File containing proportion of each pixel that is irrigated.
+             Should be on same grid as cmfile, ideally from same dataset.
+             Defaults to None.
+    precipname: The name of the precip dataset to use
+    radname: The name of the solar radiation dataset to use   
 
     Outputs:
-    datacodes: List of datacodes for each point that can be used to 
-               download the data once ready
+    alldata: Dictionary containing all the variables needed to run the crop 
+             model as np arrays. Keys are from dnames (see getnames function). 
     '''
+    
+    fnames,vnames,dnames,xnames,ynames,tnames,interpvar = getnames(basedatasetname, precipname, radname, crop)
+    
+    if downloaddata == 1:
+        download_data(os.path.dirname(dataloc), np.arange(startyear,endyear+1), vnames,
+                      lonmin, lonmax, latmin, latmax)
 
-    # check if input file provided
-    if infile:
-        ocswitch=0
-        # check if it's a shape file or not
-        if infile.split('.')[-1]=='shp':
-            shapeswitch=1
-        else:
-            shapeswitch=0
-    # if no file at all, use passed obscoords
-    else:
-        oscswitch=1
-        shapeswitch=0
+    print('Producing subsetted driving data nc file(s):')
+    datafile = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
+                                    dataloc, saveloc, simx, times, precipname, radname)
 
-    if shapeswitch==1:
-        # Read in shapefile containing yield data into geopandas dataframe
-        obsyields = gpd.read_file(yieldshapefile)
+    # process the rest of the driving data
+    print('Reading in driving data from file')
+    data = xr.load_dataset(datafile)
+    interpind = dnames.index(interpvar)
+    # mask data to country
+    if mask==1:
+        print('Masking data to ' + str(countries))
+        data = country_subset_shapefile(data=data, sfname=sfname, IDname='ADMIN', IDs=countries,
+                                        xname=xnames[interpind], yname=ynames[interpind])
+
+        data = data.drop_vars(['time_bnds'])
+
+    # process AWC
+    if crop=='wheat':
+        interpdata = data
+        interpx = xnames[interpind]
+        interpy = ynames[interpind]
+        if basedatasetname=='ukcp18':
+            AWCx = xnames[interpind]
+            AWCy = ynames[interpind]
+        elif basedatasetname=='era5':
+            AWCx = 'lon'
+            AWCy = 'lat'
+            
+        if basedatasetname == 'ukcp18':
+            loadAWC = r['load_AWC']
+            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
+            AWC = np.array(AWC).transpose(1,0,2)
+            AWC = xr.DataArray(AWC, coords=[y, x, times], dims=[ydimname, xdimname, 't'])
+        elif basedatasetname == 'era5':
+            AWC = xr.load_dataarray(AWCrast)
+            #print(AWC.shape)
+            AWC = AWC.coarsen(lon=30, lat=30, boundary='pad').mean()
+            #AWC.to_netcdf('testAWC_after_coarsen.nc')
+            #print(AWC.shape)
+            AWClist = []
+            for ts in range(0,len(times)):
+                AWCtemp = AWC.expand_dims('time')
+                timval = dt.datetime(timevar.dt.year.values[ts],
+                                     timevar.dt.month.values[ts],
+                                     timevar.dt.day.values[ts],
+                                     timevar.dt.hour.values[ts],
+                                     timevar.dt.minute.values[ts])
+                AWCtemp['time'] = [timval]
+                AWClist.append(AWCtemp)
+            AWC = xr.concat(AWClist, dim='time')
+            #print(AWC.shape)
+
+
+        AWC = AWC.interp({AWCx: interpdata[interpx], AWCy: interpdata[interpy]}, kwargs={"fill_value": None})
+        #AWC.to_netcdf('testAWC_after_coarsen_interp.nc')
+        if not AWCx==interpx:
+            AWC=AWC.drop([AWCx])
+        if not AWCy==interpy:
+            AWC=AWC.drop([AWCy])
         
-        # Extract out the geometries and find the 'center' coordinates of each field
-        obscoordsxy = [point.coords[0] for point in list(obsyields.centroid.values)]
+        if mask==1:
+            print('Masking data to ' + str(countries))
+            AWC = country_subset_shapefile(data=AWC, sfname=sfname, IDname='ADMIN', IDs=countries,
+                                           xname=interpx, yname=interpy, drop=False)
 
-    if shapeswitch==0 and oscswitch==0:
-        obscoordspd = pd.read_csv(infile)
-        xs = list(obscoordspd.iloc[:, 0].values)
-        ys = list(obscoordspd.iloc[:, 1].values)
-        obscoordsxy = [[xs[i],ys[i]] for i in range(0, len(xs))]
+        #AWC.to_netcdf('testAWC_after_coarsen_interp_mask.nc')
 
-    if oscswitch==1:
-        obscoordsxy=obscoordsin
+    # mask data to where we have AWC values
+    #print(data)
+    #print(AWC)
+    if crop=='wheat':
+        data = data.where(AWC > 0)
+
+    #print(data)
+    alldata = {}
+    if crop=='wheat':
+        # mask out non-crop areas
+        # currently only used for wheat crop
+        if cropmask==1:
+            cropmap = xr.load_dataarray(cmfile)
+            cropmap = cropmap.interp({'lon': data[xnames[interpind]], 'lat': data[ynames[interpind]]}, method='nearest')
+            data = data.where(cropmap > cropthresh)
+            
+        if irrmask == 1:
+            irrprop = xr.load_dataarray(irrfile)
+            irrprop = irrprop.interp({'lon': data[xnames[interpind]], 'lat': data[ynames[interpind]]}, method='nearest')
+            alldata['irrprop'] = irrprop.values
+            
+    x = data[xnames[interpind]].values
+    y = data[ynames[interpind]].values
+    print('Done')
     
-    # Convert these to lon,lat
-    proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-    obscoordslonlat = [proj.transform(x,y) for x,y in obscoordsxy]
+    print('Processing data into format ready for model')
+    for v in range(0,len(vnames)):
+        print('Reading in ' + dnames[v])
+        if type(vnames[v]) == list:
+            if radname=='ceres-syn':
+                alldata[dnames[v]] = (data[vnames[v][0]] - data[vnames[v][1]]).values.squeeze().transpose(1,2,0)
+            else:
+                raise TypeError(vnames[v] + ' should not be a list')
+            #print(alldata[dnames[v]])
+        else:
+            alldata[dnames[v]] = data[vnames[v]].values.squeeze().transpose(1,2,0)
 
-    # Submit request to MODIS servers for data for each location
-    datacodes=[]
-    emails=['a%40b.c', 'd%40e.f', 'g%40h.i', 'j%40k.l', 'm%40n.o', 'p%40q.r', 's%40t.u', 'v%40w.x', 'y%40z.z', 'test%40test.c', 'test%40test.b', 'test%40test.a', 'fun%40be.com', 'matt%40me.com', 'matt%40me.be', 'mat%40think.c', 'bla%40blabla.com', 'bladebla%40evenmorebla.com', 'testy%40me.com', 'cdb%40de.com', 'mccool%40as.ice', 'cold%40hot.water', '%check%40mate.mb', 'need%40idea.s']
+    if basedatasetname=='era5':
+        if crop=='grass':
+            alldata['wind'] = np.sqrt(alldata['uwind']**2 + alldata['vwind']**2)        
+        
+    if crop=='wheat':
+        AWC = AWC.transpose(interpy, interpx, 'time')
+        alldata['AWC'] = AWC.values#.transpose(1,0,2)
+        #print(alldata['AWC'].shape)
+        
+    if CO2file:
+        pCO2 = pd.read_csv(CO2file)
+        pCO2.set_index('YEAR', inplace=True)
+        alldata['cconc'] = pCO2.loc[startyear].values[0]
 
-    for counter in range(0, len(obscoordsxy)):
-        lon=str(obscoordslonlat[counter][0])
-        lat=str(obscoordslonlat[counter][1])
-        productcode = MODIScode
-        uid='cnet' + str(counter)
-        startdate='A' + str(startyear) + '001'
-        enddate='A' + str(endyear) + '365'
-        yarea=str(0)
-        xarea=str(0)
+    print('Done')
+    print('Passing data to model')
+    alldata['x'] = x
+    alldata['y'] = y
+    alldata['t'] = times     
+        
+    return alldata
 
-        headers = {
-            'Accept': 'text/csv',
-        }
+    
+def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
+                            simx, crop, elevfile='None', AWCrast='None', CO2file='None',
+                            lonmin=0, lonmax=0, latmin=0, latmax=0, downloaddata=0,
+                            mask=0, sfname='ne_10m_admin_0_countries.shp', countries=['China'],
+                            cropmask=0, cmfile='None', cropthresh=0, irrmask=0, irrfile='None',
+                            precipname='None', radname='None'):
 
-        url = 'https://modis.ornl.gov/rst/api/v1/' + productcode + '/subsetOrder?' + \
-              'latitude=' + lat + '&longitude=' + lon + \
-              '&email=' + emails[0] + '&uid=' + uid + \
-              '&startDate=' + startdate + '&endDate=' + enddate + \
-              '&kmAboveBelow=' + yarea + '&kmLeftRight=' + xarea
-
-        print('Requesting: ' + url)
-        datacode = requests.get(url, headers=headers).text
-
-        # If requests limit reached (100 per day) try a different email address
-        if 'Cannot' in datacode:
-            emails.pop(0)
-            url = 'https://modis.ornl.gov/rst/api/v1/' + productcode + '/subsetOrder?' + \
-                  'latitude=' + lat + '&longitude=' + lon + \
-                  '&email=' + emails[0] + '&uid=' + uid + \
-                  '&startDate=' + startdate + '&endDate=' + enddate + \
-                  '&kmAboveBelow=' + yarea + '&kmLeftRight=' + xarea
-            print('Request limit reached, trying new email address: ' + emails[0])
-            print('Requesting: ' + url)
-            datacode = requests.get(url, headers=headers).text
-
-        datacodes.append(datacode)
-        print(datacode)
-        time.sleep(2)
-    return datacodes
-
-def MODIS_download(datasavedir, datacodes, product_name='Lai_500m'):
     '''
-    Download the MODIS data once the requested data is ready.
-    
+    Read in the various data files and merge them into a single
+    netcdf file on the same grid, apply masking and load 
+    ancillary data files. 
     Inputs:
-    datasavedir: Where to save the data files
-    datacodes: The data codes obtained from the data requests
-    product_name: The MODIS product name as it appears in the url
-    '''
-    
-    if not os.path.exists(datasavedir):
-        os.makedirs(datasavedir)
-
-    for dc in datacodes:
-        status = 404
-        url = 'https://modis.ornl.gov/subsetdata/' + dc + '/filtered_scaled_' + product_name + '.csv'
-        lat, lon = dc.split('L')[1], dc.split('L')[2].split('S')[0]
-        outfile = url.split('/')[-1].split('.')[0] + '_lat_' + lat + '_lon_' + lon + '.csv'
-        savefile = os.path.join(datasavedir, outfile)
-
-        while status==404:
-            #status = requests.get(url, headers=headers).status_code
-            status = requests.get(url).status_code
-            if status!=404:
-                break
-            print('Data ' + dc + ' not ready, trying again in 2mins')
-            time.sleep(120)
-
-        print('Saving ' + dc + ' to ' + savefile)
-        urllib.request.urlretrieve(url, savefile)
-        time.sleep(1)
-
-def MODIS_process(datasavedir, filter_threshold=0.5):
-    '''
-    Process the MODIS data from the downloaded CSV files into
-    a pandas dataframe usable by the code.
-    The data are translated onto a 360day calendar by shifting
-    anything on the 31st of a month onto the 30th so that no 
-    data is lost. Values below a default threshold of 0.5 are
-    removed between 1st March and 1st July as unrealistic. 
-
-    Inputs:
-    datasavedir: Where the data are saved and the wildcard filenames
-                 that identifies all of the files you want to load.
-    filter_threshold: Detailed above.
+    basedatasetname: Which driving dataset we're using
+    times: 1D np array of yyyymmdd strings. This defines the time period that the data will be cut down to
+    coords: List of (x,y) coordinate pairs to extract data for
+    dataloc: Directory containing all the data files
+    saveloc: Where to output the single netcdf file containing all the variables
+    simx: Only used for ukcp18 data, to identify the ensemble member used
+    crop: Which crop to load data for
+    elevfile: Location of raster dataset containing elevation data for the grass crop
+    AWCrast: Location of the AWC dataset used for wheat crops. Defaults to 'None'.
+    CO2file: Location of csv file containing yearly CO2 concentrations. Defaults to 'None'.
+    lonmin, lonmax, latmin, latmax: Region to download if downloaddata==1. All default to 0.
+    downloaddata: Switch to control whether the basedataset is downloaded
+                  or not. Currently only works for era5. Defaults to 0 (off).
+    mask: Switch to enable masking of data by country. Defaults to 0 (off).
+    sfname: The location of the shapefile containing at least the countries 
+            to mask to. Defaults to one in current directory. 
+    countries: List of countries to mask for. Defaults to China. 
+    cropmask: Switch controlling masking based on crop. Defaults to 0 (off).
+    cmfile: Location of dataset defining location of crop for masking. Defaults to None.
+    cropthresh: Threshold in cmfile to use for masking. Defaults to 0.
+    irrmask: Switch controlling whether to account for irrigation or not.
+             Defaults to 0 (off).
+    irrfile: File containing proportion of each pixel that is irrigated.
+             Should be on same grid as cmfile, ideally from same dataset.
+             Defaults to None.
+    precipname: The name of the precip dataset to use
+    radname: The name of the solar radiation dataset to use   
 
     Outputs:
-    obspdall: Pandas dataframe containing the obs data. Cols are
-              each downloaded pixel (named using the x,y coords)
-              Rows are days of a 360day calendar (to match the model)
-    obscoords: List of 2-element lists containing the [x,y] coords
-               of the obs pixels. OSGB eastings,northings. 
+    alldata: Dictionary containing all the variables needed to run the crop 
+             model as xr datasets for each variable. The variables within each
+             xr dataset is the value(s) at each coordinate. These variable names
+             are the coordinates (x,y). 
+    '''
+        
+    fnames,vnames,dnames,xnames,ynames,tnames,interpvar = getnames(basedatasetname, precipname, radname, crop)
+    
+    if downloaddata == 1:
+        download_data(os.path.dirname(dataloc), np.arange(startyear,endyear+1), fnames,
+                      lonmin, lonmax, latmin, latmax)
+        
+    print('Producing subsetted driving data nc file(s):')
+    datafile = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
+                                    dataloc, saveloc, simx, times, precipname, radname)
+
+    # Read in the gridded data file and create the empty xarrays that will store the point data
+    print('Reading in driving data from file')
+    data = xr.load_dataset(datafile)
+    interpind = dnames.index(interpvar)
+    if mask==1:
+        print('Masking data to ' + str(countries))
+        data = country_subset_shapefile(data=data, sfname=sfname, IDname='ADMIN', IDs=countries,
+                                        xname=xnames[interpind], yname=ynames[interpind], drop=False)
+
+    alldata = {}
+    if crop=='wheat':
+        # mask out non-crop areas
+        # currently only used for wheat crop
+        # and for lon/lat driving data - will need to adapt this to work with UKCP18 data
+        # or create a new cropmap/irrmap in the UKCP18 x/y coords
+        if cropmask==1:
+            cropmap = xr.load_dataarray(cmfile)
+            cropmap = cropmap.interp({'lon': data[xdimname], 'lat': data[ydimname]})
+            data = data.where(cropmap > cropthresh)
+            
+        if irrmask == 1:
+            irrprop = xr.load_dataarray(irrfile)
+            irrprop = irrprop.interp({'lon': data[xdimname], 'lat': data[ydimname]})
+            alldata['irrprop'] = irrprop.values
+            
+    x = data[xnames[interpind]].values
+    y = data[ynames[interpind]].values
+    data = data.rename({xnames[interpind]: 'x', ynames[interpind]: 'y'})
+
+    # Read in the data from the file into a dictionary with keys specified by dnames
+    # Each variable in the dictionary will be an xarray dataarray
+    for v in range(0,len(vnames)):
+        print('Reading in ' + dnames[v])
+        if type(vnames[v]) == list:
+            if radname=='ceres-syn':
+                alldata[dnames[v]] = data[vnames[v][0]] - data[vnames[v][1]]
+            else:
+                raise TypeError(vnames[v] + ' should not be a list')
+        else:
+            alldata[dnames[v]] = data[vnames[v]]
+
+
+    alldata_p = format_point_data(coords, dnames, alldata, times)
+
+    if crop=='grass':
+        if basedatasetname == 'ukcp18':
+            loadelev = r['load_elev']
+            elevs = loadelev(x, y, elevfile)
+            elevs = np.array(elevs).squeeze()
+            alldata['elevs'] = xr.DataArray(elevs, coords=[('x', x), ('y', y)])
+            alldata_p = format_point_data(coords, ['elevs'], alldata, datadict_p=alldata_p)
+        elif basedatasetname == 'era5':
+            alldata_p['wind'] = np.sqrt(alldata_p['uwind']**2 + alldata_p['vwind']**2)
+        
+    elif crop=='wheat':
+        if basedatasetname=='ukcp18':
+            # The load_AWC function will pull out the x,y coords supplied, using aggregation and averaging
+            # The AWC data doesn't have to be on the same grid as the other data
+            loadAWC = r['load_AWC']
+            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].values.squeeze().transpose(2,1,0).shape))
+            AWC = np.array(AWC).squeeze()
+            alldata['AWC'] = xr.DataArray(AWC, coords=[('x', x), ('y', y), ('time', np.arange(0, len(times)))])
+            alldata_p = format_point_data(coords, ['AWC'], alldata, times, alldata_p)
+        if basedatasetname=='era5':
+            AWC = xr.load_dataarray(AWCrast)
+            AWC = AWC.coarsen(lon=30, lat=30, boundary='pad').mean()
+            AWClist = []
+            for ts in range(0,len(times)):
+                AWCtemp = AWC.expand_dims('t')
+                AWCtemp['t'] = [ts]
+                AWClist.append(AWCtemp)
+            AWC = xr.concat(AWClist, dim='t')
+            AWC = AWC.interp({'lon': data['x'], 'lat': data['y']})
+            alldata['AWC'] = AWC
+            alldata_p = format_point_data(coords, ['AWC'], alldata, times, alldata_p)
+            
+    if CO2file:
+        pCO2 = pd.read_csv(CO2file)
+        pCO2.set_index('YEAR', inplace=True)
+        cconc = pCO2.loc[int(times[0][:4])].values[0]
+        alldata_p['cconc'] = cconc
+
+    alldata_p['t'] = times
+    return alldata_p
+
+
+def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, ynames, tnames, interpvar, dataloc, saveloc, simx,
+                         times, precipname, radname):
+    '''
+    Read in data from various datasets and merge them into one netcdf file. 
+    Inputs:
+    basedatasetname: Which driving dataset we're using
+    filenames: Part of the filenames of each file that identifies the variable within it.
+               Must correspond with vnames and dnames.
+    vnames: The names of the variables in the netcdf files to be read in.
+            Must correspond with filenames and dnames.
+    dnames: The names of the variables to be used throughout the rest of the code
+            Must correspond with filenames and vnames.
+    xnames: The x dimnames of the variables, must correspond with the above
+    ynames: The y dimnames of the variables, must correspond with the above
+    tnames: The time dimnames of the variables, must correspond with the above
+    dataloc: Directory containing all the data files
+    saveloc: Where to output the single netcdf file containing all the variables
+    simx: Only used for ukcp18 data, to identify the ensemble member used
+    times: 1D np array of yyyymmdd strings defining the time period that the data will be cut down to
+    precipname: The name of the precip dataset to use
+    radname: The name of the solar radiation dataset to use
+    Outputs: 
+    savefile: The location of the created netcdf file containing all the variables required to run the cropmodel
     '''
     
-    datafiles = glob.glob(datasavedir)
+    if not os.path.exists(saveloc):
+            os.makedirs(saveloc)
 
-    obscoords=[]
-    counter=1
-    totalfiles = len(datafiles)
-    for filein in datafiles:
-        print('Processing ' + str(counter) + ' of ' + str(totalfiles))
-        # Read in lon,lat of pixel
-        latlon = pd.read_csv(filein, header=None, usecols=[3], nrows=1).values[0][0]
-        lat = float(latlon.split('S')[0].split('L')[1][2:])
-        lon = float(latlon.split('S')[0].split('L')[2][2:])
+    # list all the data files
+    nlist = glob.glob(dataloc, recursive=True)
 
-        # Convert to OSGB eastings,northings
-        proj = pyproj.Transformer.from_crs(4326, 27700, always_xy=True)
-        x,y = proj.transform(lon,lat)
-        # Set name of column for data table
-        colname = str(x).split('.')[0] + ',' + str(y).split('.')[0]
-        coord = [int(str(x).split('.')[0]), int(str(y).split('.')[0])]
-        obscoords.append(coord)
-
-        # Read in data file and do a whole load of nasty date wrangling
-        pixel = pd.read_csv(filein, header=None, index_col=0, usecols=[2,6], names=['date', colname], na_values='F')
-        # Convert date index column to datetimes
-        pixel.index = pd.to_datetime(pixel.index, format='%Y%j', exact=False)
-        # Change any '31st's of the month days to 30ths for 360day calendar
-        startdate = str(pixel.index[0])[:10]
-        enddate   = str(pixel.index[-1])[:10]
-        oldindex = pixel.index.values
-        newindex1 = [dt.datetime(int(str(d)[:4]), int(str(d)[5:7]), int(str(d)[8:10])) for d in list(oldindex)]
-        newindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in newindex1]
-        pixel.index = pd.DatetimeIndex(newindex2)
-        # Convert index to 360day calendar
-        datetimes = [dt.datetime.strptime(str(d), '%Y-%m-%dT%H:%M:%S.000000000') for d in pixel.index.values]
-        cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in datetimes]
-        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
-        pixel.index = cfdatetimesidx
-        # Add in all the days on which there are no obs as NaNs
-        alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
-        pixel = pixel.reindex(alldaysidx)
-        # merge each pixel into one pandas table
-        if filein == datafiles[0]:
-            obspdall = pixel
-        else:
-            obspdall = pd.merge(obspdall, pixel, on='date')
-        counter+=1
-
-    # filter out observations below a certain threshold between
-    # 1st March and 1st July each year as unrealistic
-    thresh = filter_threshold
-    startyear = obspdall.index.values[0].year + 1
-    if obspdall.index.values[-1].month < 7:
-        endyear = obspdall.index.values[-1].year - 1
+    # pull out only files corresponding to this ensemble member
+    if basedatasetname == 'ukcp18':
+        searchstr = simx + '_day_'
+        snlist = [name for name in nlist if searchstr in name]
     else:
-        endyear = obspdall.index.values[-1].year
+        snlist = nlist
 
-    for year in range(startyear, endyear+1):
-        seldates = xr.cftime_range(str(year)+'-03-01', str(year)+'-07-30', calendar='360_day', freq='D', name='date').values
-        obspdall.loc[seldates] = obspdall.loc[seldates].where(obspdall.loc[seldates]>thresh)
+    # extract only those files corresponding to the variables in filenames
+    snlist2 = []
+    for fname in filenames:
+        for filename in snlist:
+            if fname in os.path.basename(filename):
+                snlist2.append(filename)
 
-    return obspdall, obscoords
+    snlist = snlist2
+    #print(snlist)
+
+    # extract out coordinates to interpolate all variables on to 
+    intind = dnames.index(interpvar)
+    vlist = [name for name in snlist if filenames[intind] in os.path.basename(name)]
+    dataset = xr.open_mfdataset(vlist, parallel=True, combine='by_coords')
+    subsetds = dataset.sel(time=slice(times[0][:4] + '-' + times[0][4:6] + '-' + times[0][6:8], \
+                                      times[-1][:4] + '-' + times[-1][4:6] + '-' + times[-1][6:8]))
+    interpxs = subsetds[xnames[intind]]
+    interpys = subsetds[ynames[intind]]
+    interpts = subsetds[tnames[intind]]
+
+    # for each variable in varnames...
+    datasets = []
+    for v in range(0, len(filenames)):
+        print('Processing ' + filenames[v])
+        # pull out only the files corresponding to this particular variable
+        vlist = [name for name in snlist if filenames[v] in os.path.basename(name)]
+
+        # open all the files selected into one xarray dataset using dask
+        #print('Opening ' + str(vlist))
+        dataset = xr.open_mfdataset(vlist, parallel=True, combine='by_coords')
+        #print(dataset)
+        # subset to required time period
+        subsetds = dataset.sel(time=slice(times[0][:4] + '-' + times[0][4:6] + '-' + times[0][6:8], \
+                                          times[-1][:4] + '-' + times[-1][4:6] + '-' + times[-1][6:8]))
+
+        # interpolate onto common grid (if already on the common grid, nothing will happen)
+        subsetinterp = subsetds.interp({xnames[v]: interpxs, ynames[v]: interpys},
+                                       kwargs={'fill_value': None})
+
+        # ensure time coordinate metadata and labels are the same between datasets
+        subsetinterp[tnames[v]] = interpts
+        #print(subsetds)
+        datasets.append(subsetinterp)
+        
+    # merge all variables into one dataset
+    allvars = xr.merge(datasets)
+    
+    savefile = os.path.join(saveloc, 'allvars_' + simx + '_' + times[0] + \
+                            '-' + times[-1] + '.nc')
+    # save to netcdf
+    print('Saving all variables')
+    with ProgressBar():
+        allvars.to_netcdf(savefile)
+
+    return savefile
+
+
+def getnames(basedatasetname, precipname, radname, crop):
+    '''
+    Generate the file, variable and dictionary names associated
+    with each dataset.
+    '''
+    
+    if basedatasetname == 'ukcp18':
+        if crop == 'grass':
+            fnames = ["pr", "tasmax", "tasmin", "hurs", "rss", "sfcWind", "tas"]
+            vnames = fnames
+            dnames = ['prec', 'tmax', 'tmin', 'rh', 'solarrad', 'wind', 'tmean']
+            xnames = ['projection_x_coordinate']
+            ynames = ['projection_y_coordinate']
+            tnames = ['time']
+        elif crop == 'wheat':
+            fnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
+            vnames = fnames
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['projection_x_coordinate']
+            ynames = ['projection_y_coordinate']
+            tnames = ['time']
+    elif basedatasetname == 'era5':
+        if crop == 'grass':
+            fnames = ['total_precipitation', 'maximum_2m_temperature_since_previous_post_processing',
+                        'minimum_2m_temperature_since_previous_post_processing', '2m_dewpoint_temperature',
+                        'surface_net_solar_radiation', '10m_u_component_of_wind', '10m_v_component_of_wind',
+                        '2m_temperature','surface_pressure']
+            vnames = ['tp', 'mx2t', 'mn2t', 'd2m', 'ssr', 'u10', 'v10', 't2m' ,'sp']
+            dnames = ['prec', 'tmax', 'tmin', 'tdp', 'solarrad', 'uwind', 'vwind', 'tmean', 'sfcP']
+            xnames = ['longitude']
+            ynames = ['latitude']
+            tnames = ['time']
+        elif crop == 'wheat':
+            fnames = ['total_precipitation', 'maximum_2m_temperature_since_previous_post_processing',
+                        'minimum_2m_temperature_since_previous_post_processing', 'surface_net_solar_radiation',
+                        '2m_temperature']
+            vnames = ['tp' ,'mx2t', 'mn2t', 'ssr', 't2m']
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['longitude']
+            ynames = ['latitude']
+            tnames = ['time']
+
+    if len(xnames)==1:
+        xnames2 = [xnames[0] for n in fnames]
+    else:
+        xnames2 = xnames
+    if len(ynames)==1:
+        ynames2 = [ynames[0] for n in fnames]
+    else:
+        ynames2 = ynames
+    if len(tnames)==1:
+        tnames2 = [tnames[0] for n in fnames]
+    else:
+        tnames2 = tnames
+
+    precindex = dnames.index('prec')
+    radindex  = dnames.index('solarrad')
+
+    # determine an index that isn't rad or precip,
+    # to be used for interpolation later
+    for i in range(0, len(dnames)):
+        if i == precindex or i == radindex:
+            pass
+        else:
+            interpvar = dnames[i]
+            break
+    if precipname == 'aphrodite':
+        fnames[precindex] = 'APHRO_MA_025deg_V1101'
+        vnames[precindex] = 'precip'
+        xnames2[precindex] = 'lon'
+        ynames2[precindex] = 'lat'
+        tnames2[precindex] = 'time'
+    if radname == 'ceres-syn':
+        fnames[radindex] = 'CERES_SYN1deg-Day'
+        vnames[radindex] = ['adj_atmos_sw_down_all_surface_daily', 'adj_atmos_sw_up_all_surface_daily']
+        xnames2[radindex] = 'lon'
+        ynames2[radindex] = 'lat'
+        tnames2[radindex] = 'time'
+    if radname == 'ceres-flash':
+        fnames[radindex] = 'CERES_FLASH_TISA'
+        vnames[radindex] = 'sfc_net_sw_all_daily'
+        xnames2[radindex] = 'lon'
+        ynames2[radindex] = 'lat'
+        tnames2[radindex] = 'time'
+
+        
+    return fnames,vnames,dnames,xnames2,ynames2,tnames2,interpvar
+
+
+def format_point_data(coords, varnames, data, t=[None], datadict_p=None):
+    '''
+    Take the gridded data and format it into an xarray dataset with
+    one variable per point we want to extract.
+
+    Inputs:
+    coords: List of (x,y) or (lon,lat) pairs, the coords we want to extract
+            data for
+    varnames: The names of the variables we want to extract data for
+              These must correspond to the names of the variables in "data"
+    data: Dictionary with names (keys) the same as varnames containing the 
+          xarrays with the gridded data variables
+    t: Time coordinates as a list
+    datadict_p: If provided, the new variables in varnames will be added
+                to this preexisting dictionary, outputted from a previous
+                call of this function
+
+    Outputs:
+    datadict_p: A dictionary with names (keys) the same as varnames, containing
+                the point formatted data as above
+    '''
+    
+    datadict = {}
+    if not datadict_p:
+        datadict_p = {}
+
+    # create dictionary of empty xarrays to store point data
+    for var in varnames:
+        datadict[var] = {}
+        for tob in coords:
+            if t[0] != None: 
+                datadict[var][str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((1, len(t))).squeeze(), coords=[t], dims=['time'])
+            else: 
+                datadict[var][str(tob[0])+','+str(tob[1])] = xr.DataArray(np.array(0.))
+
+        datadict_p[var] = xr.Dataset(datadict[var])
+        
+        # fill empty xarray with data
+        for tob in coords:
+            datadict_p[var][str(tob[0])+','+str(tob[1])].values = data[var].sel(x=tob[0], y=tob[1], method='nearest').values.squeeze()
+    return datadict_p
+
 
 ## NOT USED ##
 def ensgen(ensmems, year, Rdatpath, CO2file):
@@ -449,7 +774,8 @@ def ensgen(ensmems, year, Rdatpath, CO2file):
 
     return GAI_all_merged, GAI_ensmean, GAI_ensstd, tmean_all_merged, prec_all_merged, solarrad_all_merged, Jarray_all_merged, Cday_all_merged, GSS_all_merged, HarvestJday, AWC, temp_cconc, x, y, t
 
-def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
+
+def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, dataloc, saveloc, AWCrast, elevfile, CO2file):
     '''
     Generates a set of ensemble members of GAI at specified coordinates,
     or the closest model grid point to them.
@@ -465,6 +791,7 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
             CO2file - Location of file containing CO2 conc. data (string)
             obscoords - List of 2-element lists containing the x,y coordinates
                         of interest on the OSGB eastings/northings grid. 
+            times - 1D np array of yyyymmdd strings defining the time period to be run
     
     Outputs: GAI_p_all - xarray dataset of GAI, dims (ensmem,t), one variable
                          for each spatial point, named after the x,y coords
@@ -482,8 +809,7 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
     '''
 
     # Load R funcs
-    loaddata = r['loaddata']
-    GAIfunc_point = r['GAI_point']
+    GAIfunc_p = r['GAI_point']
     
     cfxrs_vari = []
     ensmemoldyields_vari = []
@@ -501,52 +827,36 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
     print('Generating ensemble data')
     # gen xarrays to store data
     GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
-    create_xrs(obscoords, ensmems)
+    create_xrs(coords, ensmems, len(times))
+
     for ensmem in ensmems:
         print('Ensemble ' + str(ensmem))
-        if ensmem==ensmems[0]:
-            tmean, prec, solarrad, tmax, tmin, temp_cconc, AWC = \
-            load_drivingdata(loaddata, ensmem, ensmems, year, Rdatpath, CO2file)
-        else:
-            tmean, prec, solarrad, tmax, tmin, temp_cconc = \
-            load_drivingdata(loaddata, ensmem, ensmems, year, Rdatpath, CO2file)
+        dd = load_driving_data_point(datasetname, times, coords, dataloc, saveloc, ensmem, crop, 
+                                     elevfile=elevfile, AWCrast=AWCrast, CO2file=CO2file, precipname=precname, radname=radname)
         
-        times = []
-        for month in ['10','11','12']:
-            for day in np.arange(1,10):
-                day = '0' + str(day)
-                times.append(str(year-1)+month+day)
-            for day in np.arange(10,31):
-                times.append(str(year-1)+month+str(day))
-        for month in ['01', '02', '03', '04', '05', '06', '07', '08', '09']:
-            for day in np.arange(1,10):
-                day = '0' + str(day)
-                times.append(str(year)+month+day)
-            for day in np.arange(10,31):
-                times.append(str(year)+month+str(day))
-        times = np.array(times)
-        
-        # Select out grid points nearest to each obscoord, calculate GAI at each point
-        print('Calculating GAI at each obspoint')
+        if ensmem == ensmems[0]:
+            AWC_allp1 = dd['AWC']
+            temp_cconc = dd['cconc']
+
+        # Select out grid points nearest to each coord, calculate GAI at each point
+        print('Calculating GAI at each coord')
         counter=1
-        totalobs = len(obscoords)
+        totalobs = len(coords)
         
-        for tob in obscoords:
+        for tob in coords:
             print('Calculating GAI for ensmem ' + str(ensmem) + ' for obs ' + str(counter) + ' of ' + str(totalobs))
             counter+=1
-            tmean_p    = tmean.sel(x=tob[0], y=tob[1], method='nearest')
-            x_p = float(tmean_p['x'].values)
-            y_p = float(tmean_p['y'].values)
-            tmean_p = tmean_p.values
-            prec_p     = prec.sel(x=tob[0], y=tob[1], method='nearest').values
-            solarrad_p = solarrad.sel(x=tob[0], y=tob[1], method='nearest').values
-            tmax_p     = tmax.sel(x=tob[0], y=tob[1], method='nearest').values
-            tmin_p     = tmin.sel(x=tob[0], y=tob[1], method='nearest').values
+            coordname = str(tob[0]) + ',' + str(tob[1])
+            tmean_p    = dd['tmean'][coordname].values
+            prec_p     = dd['prec'][coordname].values
+            solarrad_p = dd['solarrad'][coordname].values
+            tmax_p     = dd['tmax'][coordname].values
+            tmin_p     = dd['tmin'][coordname].values
 
             proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-            lon,lat = proj.transform(x_p,y_p)
+            lon,lat = proj.transform(tob[0],tob[1])
 
-            datalist2 = GAIfunc_point(tmean_p, tmax_p, tmin_p, prec_p, solarrad_p, x_p, y_p, lat, times)
+            datalist2 = GAIfunc_p(tmean_p, tmax_p, tmin_p, prec_p, solarrad_p, tob[0], tob[1], lat, times, datasetname, precname, radname)
             
             GAI1         = np.array(datalist2.rx2('GAI')) # convert to python numpy                                          
             tmean1       = np.array(datalist2.rx2('tmean'))
@@ -555,12 +865,15 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
             Jarray1      = np.array(datalist2.rx2('Jarray'))
             Cday1        = np.array(datalist2.rx2('Cday'))
             GSS1         = np.array(datalist2.rx2('GSS')) 
+            CDD          = np.array(datalist2.rx2('CDD'))
+            TT           = np.array(datalist2.rx2('TT'))
             HarvestJday = datalist2.rx2('HarvestJday')
             
             # get the data coordinates                                                                                       
             x = np.array(datalist2.rx2('x'))
             y = np.array(datalist2.rx2('y'))
             t = np.array(datalist2.rx2('t'))
+            # TODO adapt to handle non-360 day calendars
             attrs = {'units': 'days since ' + t[0], 'calendar': '360_day'}
 
             GAI_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = GAI1
@@ -570,9 +883,9 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
             Jarray_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = Jarray1
             Cday_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = Cday1
             GSS_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = GSS1
-            if ensmem==ensmems[0]:
-                AWC1      = AWC.sel(x=tob[0], y=tob[1], method='nearest').values
-                AWC_allp1[str(tob[0])+','+str(tob[1])].values = AWC1
+            #if ensmem==ensmems[0]:
+            #    AWC1      = AWC.sel(x=tob[0], y=tob[1], method='nearest').values
+            #    AWC_allp1[str(tob[0])+','+str(tob[1])].values = AWC1
 
     GAI_p_all.time.attrs      = attrs
     tmean_p_all.time.attrs    = attrs
@@ -594,15 +907,18 @@ def ensgen_point(ensmems, year, Rdatpath, CO2file, obscoords):
     GAI_p_ensmean = GAI_p_all.mean(axis=0)
     GAI_p_ensstd = GAI_p_all.std(axis=0)
     
-    del tmean
-    del prec
-    del solarrad
-    del tmax
-    del tmin
+    del tmean1
+    del prec1
+    del solarrad1
+    del tmax_p
+    del tmin_p
+    del tmean_p
+    del prec_p
+    del solarrad_p
 
-    return GAI_p_all, GAI_p_ensmean, GAI_p_ensstd, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, temp_cconc
+    return GAI_p_all, GAI_p_ensmean, GAI_p_ensstd, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
 
-def create_xrs(obscoords, ensmems):
+def create_xrs(obscoords, ensmems, timlen):
     '''
     Create the xarray datasets that are filled in the ensgen routine
 
@@ -619,7 +935,7 @@ def create_xrs(obscoords, ensmems):
     full of zeros.
     '''
     
-    times = np.arange(0, 360)
+    times = np.arange(0, timlen)
     ensmemsint = [int(ensmem) for ensmem in ensmems]
     GAI_dict = {}
     tmean_dict = {}
@@ -630,14 +946,14 @@ def create_xrs(obscoords, ensmems):
     GSS_dict = {}
     AWC_dict = {}
     for tob in obscoords:
-        GAI_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        tmean_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        prec_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        solarrad_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        Jarray_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        Cday_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        GSS_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), 360), dtype='object'), coords=[ensmemsint, times], dims=['ensmem', 'time'])
-        AWC_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((1, 360)).squeeze(), coords=[times], dims=['time'])
+        GAI_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        tmean_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        prec_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        solarrad_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        Jarray_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        Cday_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        GSS_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen), dtype='object'), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        AWC_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((1, timlen)).squeeze(), coords=[times], dims=['time'])
     GAI_p_all = xr.Dataset(GAI_dict)
     tmean_p_all = xr.Dataset(tmean_dict)
     prec_p_all = xr.Dataset(prec_dict)
@@ -698,7 +1014,7 @@ def load_drivingdata(loaddata, ensmem, ensmems, year, Rdatpath, CO2file):
     else:
         return tmean, prec, solarrad, tmax, tmin, temp_cconc
 
-
+## NOT USED ##
 def fakeobsgen(obscoords, moddata):
     '''
     Generate some fake observation-like data at specified coords from the model data
@@ -1191,11 +1507,6 @@ def vari_method_point(obsall, moddata, mod_ensstd, obscoords, year, ensmem, obse
         # Store each multiplicative factor used for each timestep
         cf = merged/modGAI
         cfall[str(tob[0]) + ',' + str(tob[1])] = cf
-
-        # save figure
-        #if not os.path.exists('plots'):
-        #    os.makedirs('plots')
-        #fig1.savefig('plots/vari_year_' + str(year) + '_ensmem_' + str(ensmem) + '_loc_' + str(tob[0]) + ',' + str(tob[1]) + '.png', dpi=300)
         
     return mergedall, cfall
 
@@ -1360,7 +1671,7 @@ def update_yield_points(GAIold, GAInew, obscoords, tmean, prec, solarrad, Jarray
         
     return oldyields, newyields
 
-def update_yield_points_point(GAIold, GAInew, obscoords, tmean, prec, solarrad, Jarray, Cday, GSS, HarvestJday, AWC, temp_cconc, ensmem):
+def update_yield_points_point(GAIold, GAInew, obscoords, tmean, prec, solarrad, Jarray, Cday, GSS, HarvestJday, AWC, CDD, TT, temp_cconc, ensmem):
     '''
     Run a series of GAI timeseries through the crop model to calculate the corresponding yields
 
@@ -1410,19 +1721,11 @@ def update_yield_points_point(GAIold, GAInew, obscoords, tmean, prec, solarrad, 
         #print(type(x))
         #print(type(y))
         #print(type(temp_cconc))
-        yieldlist = wheat_yield_point(GAInew1, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, cconc=temp_cconc)
-        oldyieldlist = wheat_yield_point(GAIold1, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, cconc=temp_cconc)
-
-        # Extract out the grid points we replaced (using the same xr, nearest, method)
+        yieldlist = wheat_yield_point(GAInew1, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
+        oldyieldlist = wheat_yield_point(GAIold1, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
         
-        yieldval = np.asarray(yieldlist.rx2('z')).copy()[0]
-        oldyieldval = np.asarray(oldyieldlist.rx2('z')).copy()[0]
-        #x = np.asarray(yieldlist.rx2('x')).copy()
-        #y = np.asarray(yieldlist.rx2('y')).copy()
-        #yieldvals = yieldvals.transpose(1,0)
-        #oldyieldvals = oldyieldvals.transpose(1,0)
-        #yieldxr = xr.DataArray(yieldvals, coords=[('y', y), ('x', x)])
-        #oldyieldxr = xr.DataArray(oldyieldvals, coords=[('y', y), ('x', x)])
+        yieldval = np.asarray(yieldlist.rx2('finalyield')).copy()[0]
+        oldyieldval = np.asarray(oldyieldlist.rx2('finalyield')).copy()[0]
 
         newyields.append(yieldval)
         oldyields.append(oldyieldval)
@@ -1749,7 +2052,6 @@ def setup_plot(plot):
         return ax1
 
 
-
 def remove_zeros(ts):
     '''
     Remove any zeros from the beginning or end of the supplied timeseries,
@@ -1956,3 +2258,198 @@ def verifyyield(yieldfile, obscoords, oldyields_vari, newyields_vari, years, sav
 
     savefile = os.path.join(savedir, 'mean_yield.png')
     junk1, junk2 = plot_boxes_yield(oldsandnews, [['mod_yield','assim_yield']], [0,1,2], ['mod_yield', 'assim_yield', 'actual_yield'], ['yield (tn/hec)'], [[7,18]], 'Ensemble-mean yields', yields, savefile)
+
+
+def download_data(outdir, years, variables, lonmin, lonmax, latmin, latmax):
+
+    downloadera5(outdir, years, variables, lonmin, lonmax, latmin, latmax)
+
+
+def outputsave(data, coords, dims, year, name, units, outfile):
+    data = xr.DataArray(data, coords=coords, dims=dims)
+    if len(coords)==2:
+        data = data.expand_dims({'time': [str(year+1)]})
+    data.name = name
+    data.attrs = {'units': units}
+    data.to_netcdf(outfile)
+
+def country_subset_shapefile(data=None, datafile=None, multifile=0, sfname=None, xname='x', yname='y', IDname=None, IDs=None, drop=True):
+    '''
+    Function to subset an xarray dataarray or dataset, or netcdf dataset, to selected shapes from 
+    a shapefile. Returns an xarray dataset with of the same shape as the input
+    datafile but with the data outside the selected shapes
+    set to nans. Also returns the shapes so these can be plotted.
+
+    data:     An xarray DataArray or DataSet
+    datafile: The filename of the netcdf file to subset. Multiple files can be selected with * etc.
+              If this is the case multifile should be set to 1. Defaults to 0.
+    sfname:   The filename of the shapefile
+    IDname:   The name of the catgeory to search over for selecting shapes to subset to (e.g. 'RIVER')
+    IDs:      The values of the category to select (e.g. ['Thames', 'Severn'])
+    multifile:Are multiple files specfied in datafile? Set to 1 if so. In this case the files are read in
+              using dask, which can process data that exceeds the memory capacity of the machine by
+              processing in parallel.
+    xname: Name of the x-coordinate in the netcdf file(s). 'x' by default.
+    yname: Name of the y-coordinate in the netcdf file(s). 'y' by default
+    '''
+
+    # Read in data
+    if datafile:
+        print('Reading in ' + datafile)
+        if multifile == 1:
+            data = xr.open_mfdataset(datafile, parallel=True)
+        else:
+            data = xr.load_dataset(filein)
+
+    subset = add_shape_coord_from_data_array(data, sfname, IDname, IDs, yname, xname)
+    if drop==True:
+        subset = subset.where(subset[IDname]==1, drop=True)
+    else:
+        subset = subset.where(subset[IDname]==1)
+        
+        
+    return subset
+
+
+
+def add_shape_coord_from_data_array(xr_da, shp_path, IDname, IDs, latname, lonname):
+    """ Create a new coord for the xr_da indicating whether or not it 
+    is inside the shapefile
+    
+    Creates a new coord - "coord_name" which will have integer values
+    used to subset xr_da for plotting / analysis/
+    
+    Usage:
+    -----
+    precip_da = add_shape_coord_from_data_array(precip_da, "awash.shp", "awash")
+    awash_da = precip_da.where(precip_da.awash==0, other=np.nan) 
+    """
+    # 1. read in shapefile
+    shp_gpd = gpd.read_file(shp_path)
+    
+    # 2. create a list of tuples (shapely.geometry, id)
+    #    this allows for many different polygons within a .shp file (e.g. States of US)
+    shapes = []
+    counter = 0
+    for ID in shp_gpd[IDname]:
+        if ID in IDs:
+            shapes.append((shp_gpd['geometry'][counter], 1))
+            print('Found: ' + str(shp_gpd[IDname][counter]))
+        counter+=1
+
+    if len(shapes) == 0:
+        raise AttributeError(IDname + ' ' + str(IDs) + ' not found in shapefile')
+
+    xr_da[IDname] = rasterize(shapes, xr_da.coords,
+                              longitude=lonname, latitude=latname)
+    
+        
+    return xr_da
+
+
+def transform_from_latlon(lat, lon):
+    """ 
+    input 1D array of lat / lon and output an Affine transformation
+    """
+
+    lat = np.asarray(lat)
+    lon = np.asarray(lon)
+    trans = Affine.translation(lon[0], lat[0])
+    scale = Affine.scale(lon[1] - lon[0], lat[1] - lat[0])
+    return trans * scale
+
+def rasterize(shapes, coords, latitude='y', longitude='x',
+              fill=np.nan, **kwargs):
+    """
+    Rasterize a list of (geometry, fill_value) tuples onto the given
+    xarray coordinates. This only works for 1d latitude and longitude
+    arrays.
+
+    usage:
+    -----
+    1. read shapefile to geopandas.GeoDataFrame
+          `states = gpd.read_file(shp_dir+shp_file)`
+    2. encode the different shapefiles that capture those lat-lons as different
+        numbers i.e. 0.0, 1.0 ... and otherwise np.nan
+          `shapes = (zip(states.geometry, range(len(states))))`
+    3. Assign this to a new coord in your original xarray.DataArray
+          `ds['states'] = rasterize(shapes, ds.coords, longitude='X', latitude='Y')`
+
+    arguments:
+    ---------
+    : **kwargs (dict): passed to `rasterio.rasterize` function
+
+    attrs:
+    -----
+    :transform (affine.Affine): how to translate from latlon to ...?
+    :raster (numpy.ndarray): use rasterio.features.rasterize fill the values
+      outside the .shp file with np.nan
+    :spatial_coords (dict): dictionary of {"X":xr.DataArray, "Y":xr.DataArray()}
+      with "X", "Y" as keys, and xr.DataArray as values
+
+    returns:
+    -------
+    :(xr.DataArray): DataArray with `values` of nan for points outside shapefile
+      and coords `Y` = latitude, 'X' = longitude.
+    """
+                  
+    print('Adding mask to xarray')
+    transform = transform_from_latlon(coords[latitude], coords[longitude])
+    out_shape = (len(coords[latitude]), len(coords[longitude]))
+    raster = features.rasterize(shapes, out_shape=out_shape,
+                                fill=fill, transform=transform,
+                                dtype=float, **kwargs)
+    spatial_coords = {latitude: coords[latitude], longitude: coords[longitude]}
+    return xr.DataArray(raster, coords=spatial_coords, dims=(latitude, longitude))
+
+
+def calc_daily_climo(inputs, outname, varname, tname, xname='x', yname='y', roll=None):
+    '''
+    Function to calculate a daily climatology from several years worth of daily data
+    Only really designed for outputs from the wheat model assuming a growing season
+    running from 1st Oct. May generalise this later. 
+    
+    Inputs:
+    inputs - String that identifies all the files e.g. files_????.nc
+    outname - Output name and folder of climo file, excluding the file extension.
+              climo.nc and stdev.nc will be added to the respective output files
+    varname - Name of variable in file to calculate climo of
+    tname - Name of the time dimension in the input files
+    roll - The number of days to calculate a rolling mean of the stdev statistic.
+           Default is None which means no rolling mean of the stdev stat is produced.
+    '''
+
+    coutname = outname + '_climo.nc'
+    soutname = outname + '_stdev.nc'
+    if roll:
+        rcoutname = outname + '_' + str(roll) + 'dayclimo.nc'
+        rsoutname = outname + '_' + str(roll) + 'daystdev.nc'
+    
+    cdo = Cdo()
+    cdo.ydaymean(input='-cat ' + inputs,
+                 output=coutname)
+    cdo.ydaystd(input='-cat ' + inputs,
+                 output=soutname)
+    
+    tc = xr.load_dataset(coutname)
+    tc = tc.rename({tname: 't'})
+    tc = tc.roll(t=-274, roll_coords=True)
+    newtc = pd.date_range('2003-10-01', freq='D', periods=366)
+    tc[varname + '2'] = xr.DataArray(tc[varname].values, [newtc, tc[yname], tc[xname]], ['time', yname, xname])
+    tc = tc.drop_vars([varname, 't'])
+    tc = tc.rename({varname + '2': varname})
+    tc.to_netcdf(coutname)
+    if roll:
+        tcr = tc.rolling(time=roll, min_periods=1).mean()
+        tcr.to_netcdf(rcoutname)
+
+    ts = xr.load_dataset(soutname)
+    ts = ts.rename({tname: 't'})
+    ts = ts.roll(t=-274, roll_coords=True)
+    ts[varname + '2'] = xr.DataArray(ts[varname].values, [newtc, ts[yname], ts[xname]], ['time', yname, xname])
+    ts = ts.drop_vars([varname, 't'])
+    ts = ts.rename({varname + '2': varname})
+    ts.to_netcdf(soutname)
+    if roll:
+        tsr = ts.rolling(time=roll, min_periods=1).mean()
+        tsr.to_netcdf(rsoutname)
