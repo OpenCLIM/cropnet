@@ -22,6 +22,8 @@ TO BE IMPLEMENTED:
 Using the data assimilation for future years, using a simple linear regression approach, or machine learning to tailor the
 assimilation to each field. 
 
+Details of the winter wheat crop model used can be found in Redhead et al. (2020): The influence of landscape composition and configuration on crop yield resilience, Journal of Applied Ecology, 57, 2180-2190, https://doi.org/10.1111/1365-2664.13722
+
 Data Assimilation details
 -------------------------
 A method a bit like 4Dvar that attempts to minimize a cost function which consists of terms that grow in magnitude the
@@ -154,3 +156,4 @@ Anytime you want to run these scripts, or use my python setup, run:
 bash
 loadconda
 source activate DAenv
+
