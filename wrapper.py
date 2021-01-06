@@ -270,12 +270,12 @@ if len(years) > 1:
     cfclim_vari = cfensmean_vari.groupby('date.dayofyear').mean().roll(dayofyear=dayroll, roll_coords=True)
 
 print('Saving to netcdf')
-if not os.path.exists(saveloc):
-    os.makedirs(saveloc)
+if not os.path.exists(yieldsaveloc):
+    os.makedirs(yieldsaveloc)
 now = dt.datetime.now().strftime('%Y%m%d%H%M%s')[:14]
-oldyieldfile = os.path.join(saveloc, now + '_oldyield.nc')
-newyieldfile = os.path.join(saveloc, now + '_newyield.nc')
-cfclimfile   = os.path.join(saveloc, now + '_cfclimo.nc')
+oldyieldfile = os.path.join(yieldsaveloc, now + '_oldyield.nc')
+newyieldfile = os.path.join(yieldsaveloc, now + '_newyield.nc')
+cfclimfile   = os.path.join(yieldsaveloc, now + '_cfclimo.nc')
 oldyields_vari.to_netcdf(oldyieldfile)
 newyields_vari.to_netcdf(newyieldfile)
 if len(years) > 1:

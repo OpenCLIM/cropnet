@@ -36,10 +36,12 @@ The error in the observed timeseries/points is assumed to be 0.1 regardless of t
 absolute error can be switched to a percentage error, whereby the error is assumed to be, e.g. 10% of the obs value.
 However, in testing it was found that the absolute error produces much smoother results, particularly early on in the
 timeseries when the observation values are small.
+
 The error in the smoothed timeseries is a little more complex, but can be understood as the value by which the timeseries
 should not change by more than for one timestep to the next. This is set to vary depending on the magnitude of each value in the
 modelled GAI. If the values at a part of the modelled GAI timeseries are small, then this error is smaller, and thus the 
 smoothing constraint is stronger for this part of the timeseries, and vice versa.
+
 Other controls on the strength of the smoothing constraint exist. These are power and order.
 Power controls the overall strength of the constraint throughout the timeseries, so the higher this is, the smoother
 the optimal timeseries will be.
@@ -104,11 +106,9 @@ To run from the notebook:
 - Run the main code in the cell below
 
 The code is set up to run for the x,y coordinates specified by the obscoords variable, for a single year or multiple years,
-for each UKCP18 ensemble member. The first time it is run it will download the required MODIS LAI data for assimilation.
+for each UKCP18 ensemble member. To download the required MODIS LAI data for assimilation set obs=1.
 After this, if the xy coords and years have not been changed, the obs switch can be set to 2, so that it uses what is already
 downloaded. 
-The first time it is run it will also format the netcdf UKCP18 data into an R datacube format. Future times it is run,
-the genRdata switch can be set to 0. In future versions of the code, it will be changed to use the netCDF data directly.
 
 The final output of the code will be the original, modelled yield and the updated, assimilated yield in xarray datasets,
 which are similar in structure to netcdf files. The data will also be saved on disk as netcdf files. The datasets will
