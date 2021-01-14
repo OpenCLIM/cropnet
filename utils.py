@@ -5,6 +5,7 @@ import rpy2.robjects.packages as rpackages
 from rpy2.robjects.vectors import StrVector
 from rpy2.robjects import numpy2ri
 from download_era5 import *
+import rpy2
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -40,8 +41,11 @@ ncdf4 = importr('ncdf4')
 abind = importr('abind')
 Evapotranspiration = importr('Evapotranspiration')
 r = robjects.r
-r['source']('Grass_potpredict_MJB.R') # define R functions
-r['source']('Lynch_potpredict_v2_MJB.R')
+try:
+    r['source']('Grass_potpredict_MJB.R') # define R functions
+    r['source']('Lynch_potpredict_v2_MJB.R')
+except rpy2.rinterface.embedded.RRuntimeError:
+    print('Warning: R crop model files not available')
 
 def load_driving_data(basedatasetname, times,
                       dataloc, saveloc, simx, crop, AWCrast='None', CO2file='None',
