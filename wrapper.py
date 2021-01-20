@@ -25,6 +25,7 @@ precname = 'None'
 radname = 'None'
 
 # location of the driving data netcdf files. Must encompass the time range specified 
+# Use wildcards to match all the required data files. '**' means every directory 
 dataloc = "/data/UKCP18/RCM_12km/daily_timeseries/downloaded_data/**/*.nc"
 
 # names of the driving data variables to use
