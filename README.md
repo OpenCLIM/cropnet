@@ -65,8 +65,8 @@ minimum 2m temperature in degC (tasmin), average net surface shortwave radiation
 (tas).
  - The variable names are user editable using the variable 'varnames', but the varnames specified must be both in the filenames 
 and the name of the variables within the netcdf files. 
- - The end of each filename must also be written _nn_startdate_enddate.nc with startdate and enddate formatted yyyymmdd. 
-nn is the ensemble number, but can be any string, so long as these are input to the code using the 'ensmems' variable.
+ - The end of each filename must also be written _nn_day_startdate_enddate.nc with startdate and enddate formatted yyyymmdd. 
+nn is the ensemble number, but can be any number string, so long as these are input to the code using the 'ensmems' variable.
 - The data must be on an x,y grid where x and y are OSGB eastings and northings. The variable names of the x and y
 variables must be projection_x_coordinate and projection_y_coordinate. 
 - The data must be on a 360day calendar.

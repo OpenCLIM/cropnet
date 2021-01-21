@@ -779,7 +779,7 @@ def ensgen(ensmems, year, Rdatpath, CO2file):
     return GAI_all_merged, GAI_ensmean, GAI_ensstd, tmean_all_merged, prec_all_merged, solarrad_all_merged, Jarray_all_merged, Cday_all_merged, GSS_all_merged, HarvestJday, AWC, temp_cconc, x, y, t
 
 
-def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, dataloc, saveloc, AWCrast, elevfile, CO2file):
+def ensgen_point(ensmems, times, moderrtype, moderr, datasetname, precname, radname, crop, coords, dataloc, saveloc, AWCrast, elevfile, CO2file):
     '''
     Generates a set of ensemble members of GAI at specified coordinates,
     or the closest model grid point to them.
@@ -789,11 +789,12 @@ def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, d
 
     Inputs: ensmems - List of 0-padded 2-digit strings corresponding to the ensemble 
                       member numbers
-            year - Growing year to work with (int/float). Note this corresponds
-                   to the year that harvest is made in.
-            Rdatpath - Location of .Rdata driving data files (string)
+            moderrtype - Defines the type of modstd used if only one ensemble member
+                         if 1, modstd = mod*moderr for each tstep (relative)
+                         if 0, modstd = moderr for each tstep (actual)
+            moderr - The mod stdev to assume (either relative or actual) if only one ensmem
             CO2file - Location of file containing CO2 conc. data (string)
-            obscoords - List of 2-element lists containing the x,y coordinates
+            coords - List of 2-element lists containing the x,y coordinates
                         of interest on the OSGB eastings/northings grid. 
             times - 1D np array of yyyymmdd strings defining the time period to be run
     
@@ -830,8 +831,12 @@ def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, d
     # mean and stdev for each obscoord
     print('Generating ensemble data')
     # gen xarrays to store data
-    GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
-    create_xrs(coords, ensmems, len(times))
+    if len(ensmems)==1:
+        GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, GAI_p_ensstd = \
+        create_xrs(coords, ensmems, len(times), 1)
+    else:
+        GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
+        create_xrs(coords, ensmems, len(times), 0)
 
     for ensmem in ensmems:
         print('Ensemble ' + str(ensmem))
@@ -899,6 +904,7 @@ def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, d
     Cday_p_all.time.attrs     = attrs
     GSS_p_all.time.attrs      = attrs
     AWC_allp1.time.attrs      = attrs
+    GAI_p_ensstd.time.attrs   = attrs
     GAI_p_all      = xr.decode_cf(GAI_p_all, decode_coords=False)
     tmean_p_all    = xr.decode_cf(tmean_p_all, decode_coords=False)
     prec_p_all     = xr.decode_cf(prec_p_all, decode_coords=False)
@@ -907,9 +913,19 @@ def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, d
     Cday_p_all     = xr.decode_cf(Cday_p_all, decode_coords=False)
     GSS_p_all      = xr.decode_cf(GSS_p_all, decode_coords=False)
     AWC_allp1      = xr.decode_cf(AWC_allp1, decode_coords=False)
+    GAI_p_ensstd   = xr.decode_cf(GAI_p_ensstd, decode_coords=False)
 
     GAI_p_ensmean = GAI_p_all.mean(axis=0)
-    GAI_p_ensstd = GAI_p_all.std(axis=0)
+    if len(ensmems)==1:
+        for tob in coords:
+            if moderrtype == 0:
+                modstd = moderr
+            elif moderrtype == 1:
+                modstd = moderr * GAI_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmems[0]))]
+            GAI_p_ensstd[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmems[0]))] = modstd
+        GAI_p_ensstd = GAI_p_ensstd.squeeze()
+    else:
+        GAI_p_ensstd = GAI_p_all.std(axis=0)
     
     del tmean1
     del prec1
@@ -922,7 +938,7 @@ def ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, d
 
     return GAI_p_all, GAI_p_ensmean, GAI_p_ensstd, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
 
-def create_xrs(obscoords, ensmems, timlen):
+def create_xrs(obscoords, ensmems, timlen, stdswitch):
     '''
     Create the xarray datasets that are filled in the ensgen routine
 
@@ -931,6 +947,9 @@ def create_xrs(obscoords, ensmems, timlen):
                 of interest on the OSGB eastings/northings grid. 
     ensmems - List of 0-padded 2-digit strings corresponding to the ensemble 
               member numbers
+    timlen - Length of the time dimension
+    stdswitch - 1 if we need to create an xarray to store the 'stdev' in.
+                This is only needed if we only have 1 ensemble member
     
     Outputs:
     GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, 
@@ -949,6 +968,8 @@ def create_xrs(obscoords, ensmems, timlen):
     Cday_dict = {}
     GSS_dict = {}
     AWC_dict = {}
+    if stdswitch==1:
+        GAI_p_ensstd_dict = {}
     for tob in obscoords:
         GAI_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         tmean_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
@@ -957,6 +978,8 @@ def create_xrs(obscoords, ensmems, timlen):
         Jarray_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         Cday_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         GSS_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen), dtype='object'), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        if stdswitch==1:
+            GAI_p_ensstd_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         AWC_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((1, timlen)).squeeze(), coords=[times], dims=['time'])
     GAI_p_all = xr.Dataset(GAI_dict)
     tmean_p_all = xr.Dataset(tmean_dict)
@@ -966,8 +989,13 @@ def create_xrs(obscoords, ensmems, timlen):
     Cday_p_all = xr.Dataset(Cday_dict)
     GSS_p_all = xr.Dataset(GSS_dict)
     AWC_allp1 = xr.Dataset(AWC_dict)
+    if stdswitch==1:
+        GAI_p_ensstd = xr.Dataset(GAI_p_ensstd_dict)
 
-    return GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1
+    if stdswitch==1:
+        return GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, GAI_p_ensstd
+    else:
+        GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1
 
 def load_drivingdata(loaddata, ensmem, ensmems, year, Rdatpath, CO2file):
     '''
@@ -1416,7 +1444,7 @@ def vari_method_point(obsall, moddata, mod_ensstd, obscoords, year, ensmem, obse
         
         # multiply the mod error by the model error inflation value (default 1)
         modstds_trim = modstds_trim * moderrinfl
-        
+
         # select out the obs point from the obs table
         obs = obsall[str(tob[0]) + ',' + str(tob[1])]
 
@@ -1451,6 +1479,8 @@ def vari_method_point(obsall, moddata, mod_ensstd, obscoords, year, ensmem, obse
         # generate the covariance matrices for the obs and the mod
         modcov = np.eye(len(modstds_trim))*(modstds_trim**2)
         obscov = np.eye(len(obsstds_trim))*(obsstds_trim**2)
+        print(modcov.dtype)
+        print(obscov.dtype)
 
         # generate the covariance matrix for the smoothed term
         # tsvar is approximately the max value you think GAI should

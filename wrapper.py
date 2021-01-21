@@ -36,16 +36,16 @@ varnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
 elevfile = 'None'
 
 # location and filename of the csv file containing the CO2 concentration projections
-CO2file = '/users/sgsys/matbro/cropNET/data/UKCP18_CO2_RCP85.csv'
+CO2file = '/users/sgsys/matbro/cropnet/data/UKCP18_CO2_RCP85.csv'
 
 # location and filename of the AWC data
-AWCrast = "/users/sgsys/matbro/cropNET/data/MaxWet1.tif"
+AWCrast = "/users/sgsys/matbro/cropnet/data/MaxWet1.tif"
 
 # location to save outputted yields in                                                                                       
-yieldsaveloc = '/users/sgsys/matbro/cropNET/outputs/'
+yieldsaveloc = '/users/sgsys/matbro/cropnet/outputs/'
 
 # where to store the formatted driving data
-saveloc = '/users/sgsys/matbro/cropNET/driving_datafiles'
+saveloc = '/users/sgsys/matbro/cropnet/driving_datafiles'
 
 # switch controlling plotting of outputs.
 # may not work outside of a jupyter notebook...
@@ -70,7 +70,7 @@ plotdir = 'None'
 # run for in howmanyobs below.
 verify = 0
 howmanyobs = -1 # set to -1 for all
-yieldshapefile='/users/sgsys/matbro/data/cropyield/Mean_wheat_yields_v2/mean_wheat_yields_OSGB.shp'
+yieldshapefile='/users/sgsys/matbro/cropnet/data/cropyield/Mean_wheat_yields_v2/mean_wheat_yields_OSGB.shp'
 
 # obs switch. Set to 1 to download MODIS LAI, 2 to use already downloaded data,                                               
 # option 1 uses the coords specified below
@@ -81,7 +81,7 @@ obs = 1
 # Note that all files in this directory will be used, regardless
 # of whether they are newly downloaded or not.
 # Create separate directories for different sets of locations
-MODISdir = '/users/sgsys/matbro/cropNET/data/MODIS/test'
+MODISdir = '/users/sgsys/matbro/cropnet/data/MODIS/test'
 
 # Coordinates to run over. Alternatively, a csv file with one x,y coord per line can
 # be specfied in coordsfile. Set coordsfile to None to use obscoords.
@@ -115,7 +115,10 @@ endday = 1
 obserrtype = 0 # if 1, obsstd = obs*obserr for each tstep (relative)
                # if 0, obsstd = obserr for each tstep (actual)
 obserr = 0.1 # the obs stdev to assume (either relative or actual)
-moderrinfl = 1 # factor to multiply the model error by
+
+moderrtype = 1 # as obserrtype
+moderr = 0.5 # as obserr. These two variables only used if len(ensmems)==1
+moderrinfl = 1 # factor to multiply the model error by. 
 
 # maximum value by which the optimum/assimilated timeseries should not change by more than
 # for one timestep to the next, for the smoothing constraint.
@@ -228,7 +231,8 @@ for year in years:
     tmean_p_all, prec_p_all, solarrad_p_all, \
     Jarray_p_all, Cday_p_all, GSS_p_all, \
     HarvestJday, AWC_allp, CDD, TT, temp_cconc = \
-    ensgen_point(ensmems, times, datasetname, precname, radname, crop, coords, 
+    ensgen_point(ensmems, times, moderrtype, moderr,
+                 datasetname, precname, radname, crop, coords, 
                  dataloc, saveloc, AWCrast, elevfile, CO2file)
 
     # now we've done the ensgen, do the assimilation
