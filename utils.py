@@ -863,10 +863,8 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, datasetname, prec
             tmin_p     = dd['tmin'][coordname].values
 
             # Convert to lon,lat
-            #proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-            projfrom = pyproj.Proj(init='epsg:27700')
-            projto   = pyproj.Proj(init='epsg:4326')
-            lon,lat = pyproj.transform(projfrom,projto,tob[0],tob[1])
+            proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
+            lon,lat = proj.transform(tob[0],tob[1], errcheck=True)
 
             datalist2 = GAIfunc_p(tmean_p, tmax_p, tmin_p, prec_p, solarrad_p, tob[0], tob[1], lat, times, datasetname, precname, radname)
             
