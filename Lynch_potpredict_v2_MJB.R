@@ -561,6 +561,8 @@ GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetnam
   GAI[p8i] <- ((d * (GAIend[6] - maxGAI)) + maxGAI)[p8i]
   
   GAI[Jarray > HarvestJday & Cday > 100] <- 0
+
+  LI <- 1-exp(-0.5*GAI)
   
   ###### Account for failure to flower pre-harvest!
   ## moved to yield function so that we can calculate GAI for subsets of the growing year
@@ -573,7 +575,7 @@ GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetnam
   ##print(X)
   ##print(Y)
   ##print(GAI)
-  data <- list('GAI'=GAI, 'tmean'=tmean, 'prec'=prec, 'solarrad'=solarrad, 'Jarray'=Jarray, 'Cday'=Cday, 'CDD'=CDD, 'TT'=TT, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'x'=X, 'y'=Y, 't'=dates)
+  data <- list('GAI'=GAI, 'LI'=LI, 'tmean'=tmean, 'prec'=prec, 'solarrad'=solarrad, 'Jarray'=Jarray, 'Cday'=Cday, 'CDD'=CDD, 'TT'=TT, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'x'=X, 'y'=Y, 't'=dates)
   return(data)
 }
         ## AFAIK GAI=LAI
@@ -696,11 +698,12 @@ wheat_yield <- function(GAI, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, Harv
 
 
 ## as wheat_yield but for point driving data
-wheat_yield_point <- function(GAI, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, cconc=NULL, waterlog=1, noflower=1, irrprop=0, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
+wheat_yield_point <- function(GAI, LI, assimvar, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, cconc=NULL, waterlog=1, noflower=1, irrprop=0, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
 
-    
-        LI <- 1-exp(-0.5*GAI)
-    
+        ## If we're not assimilating LI need to calculate it from the assimilated GAI
+        if (!(assimvar %in% "fPAR")) {    
+          LI <- 1-exp(-0.5*GAI)
+        }    
 	## CO2 fertilisation effect
    	if(FCO2 == TRUE){
 		RUE <-  ifelse(cconc < 350, RUE, ifelse(cconc > 750, RUE + RUE * (750/350 - 1) * 0.333, RUE + RUE * (cconc/350 - 1) * 0.333)) 
@@ -891,23 +894,3 @@ testfunc <- function(a){
   b=a+1
   return(b)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

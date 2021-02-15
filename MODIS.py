@@ -37,7 +37,7 @@ def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H')
 
     # check if input file provided
     if infile:
-        ocswitch=0
+        oscswitch=0
         # check if it's a shape file or not
         if infile.split('.')[-1]=='shp':
             shapeswitch=1
@@ -50,7 +50,7 @@ def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H')
 
     if shapeswitch==1:
         # Read in shapefile containing yield data into geopandas dataframe
-        obsyields = gpd.read_file(yieldshapefile)
+        obsyields = gpd.read_file(infile)
         
         # Extract out the geometries and find the 'center' coordinates of each field
         obscoordsxy = [point.coords[0] for point in list(obsyields.centroid.values)]
@@ -65,12 +65,14 @@ def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H')
         obscoordsxy=obscoordsin
     
     # Convert these to lon,lat
-    proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-    obscoordslonlat = [proj.transform(x,y) for x,y in obscoordsxy]
+    #proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
+    projfrom = pyproj.Proj(init='epsg:27700')
+    projto   = pyproj.Proj(init='epsg:4326')
+    obscoordslonlat = [pyproj.transform(projfrom,projto,x,y) for x,y in obscoordsxy]
 
     # Submit request to MODIS servers for data for each location
     datacodes=[]
-    emails=['a%40b.c', 'd%40e.f', 'g%40h.i', 'j%40k.l', 'm%40n.o', 'p%40q.r', 's%40t.u', 'v%40w.x', 'y%40z.z', 'test%40test.c', 'test%40test.b', 'test%40test.a', 'fun%40be.com', 'matt%40me.com', 'matt%40me.be', 'mat%40think.c', 'bla%40blabla.com', 'bladebla%40evenmorebla.com', 'testy%40me.com', 'cdb%40de.com', 'mccool%40as.ice', 'cold%40hot.water', '%check%40mate.mb', 'need%40idea.s']
+    emails=['a%40b.c', 'd%40e.f', 'g%40h.i', 'j%40k.l', 'm%40n.o', 'p%40q.r', 's%40t.u', 'v%40w.x', 'y%40z.z', 'test%40test.c', 'test%40test.b', 'test%40test.a', 'fun%40be.com', 'matt%40me.com', 'matt%40me.be', 'mat%40think.c', 'bla%40blabla.com', 'bladebla%40evenmorebla.com', 'testy%40me.com', 'cdb%40de.com', 'mccool%40as.ice', 'cold%40hot.water', 'check%40mate.mb', 'need%40idea.s']
 
     for counter in range(0, len(obscoordsxy)):
         lon=str(obscoordslonlat[counter][0])
@@ -96,7 +98,7 @@ def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H')
         datacode = requests.get(url, headers=headers).text
 
         # If requests limit reached (100 per day) try a different email address
-        if 'Cannot' in datacode:
+        if 'error' in datacode:
             emails.pop(0)
             url = 'https://modis.ornl.gov/rst/api/v1/' + productcode + '/subsetOrder?' + \
                   'latitude=' + lat + '&longitude=' + lon + \
@@ -178,9 +180,12 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
         lat = float(latlon.split('S')[0].split('L')[1][2:])
         lon = float(latlon.split('S')[0].split('L')[2][2:])
 
-        # Convert to OSGB eastings,northings
-        proj = pyproj.Transformer.from_crs(4326, 27700, always_xy=True)
-        x,y = proj.transform(lon,lat)
+        # Convert to OSGB
+        #proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
+        projto = pyproj.Proj(init='epsg:27700')
+        projfrom   = pyproj.Proj(init='epsg:4326')
+        x,y = pyproj.transform(projfrom,projto,lon,lat)
+
         # Set name of column for data table
         colname = str(x).split('.')[0] + ',' + str(y).split('.')[0]
         coord = [int(str(x).split('.')[0]), int(str(y).split('.')[0])]
