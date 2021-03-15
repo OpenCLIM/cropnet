@@ -76,7 +76,7 @@ yieldshapefile='/users/sgsys/matbro/cropnet/data/cropyield/Mean_wheat_yields_v3/
 
 # obs switch. Set to 1 to download MODIS LAI, 2 to use already downloaded data,                                               
 # option 1 uses the coords specified below
-obs = 1
+obs = 2
 
 # directory containing MODIS LAI data, or data to download it to
 # Ignored if obs==0

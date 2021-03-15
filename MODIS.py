@@ -66,7 +66,10 @@ def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H')
     
     # Convert these to lon,lat
     proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-    obscoordslonlat = [proj.transform(x,y, errcheck=True) for x,y in obscoordsxy]
+    try:
+        obscoordslonlat = [proj.transform(x,y, errcheck=True) for x,y in obscoordsxy]
+    except pyproj.exceptions.ProjError:
+        obscoordslonlat = [proj.transform(x,y, errcheck=True) for x,y in obscoordsxy]
 
     # Submit request to MODIS servers for data for each location
     datacodes=[]
@@ -180,7 +183,10 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
 
         # Convert to OSGB
         proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-        x,y = proj.transform(lon,lat, errcheck=True)
+        try:
+            x,y = proj.transform(lon,lat, errcheck=True)
+        except pyproj.exceptions.ProjError:
+            x,y = proj.transform(lon,lat, errcheck=True)
 
         # Set name of column for data table
         colname = str(x).split('.')[0] + ',' + str(y).split('.')[0]
