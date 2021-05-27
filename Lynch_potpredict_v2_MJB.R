@@ -71,6 +71,7 @@ data <- list('temp_tas'=temp_tas, 'temp_rss'=temp_rss, 'temp_pr'=temp_pr, 'temp_
 return(data)
 }
 
+
 load_AWC <- function(X, Y, loc, dims){
 coords <- expand.grid(as.numeric(X), as.numeric(Y))
 dat_SP <- SpatialPoints(coords, proj4string = CRS("+init=epsg:27700"))
@@ -88,21 +89,59 @@ AWC <- array(extract(AWCraster,  dat_SP, fun = mean, na.rm = TRUE), dims)
 return(AWC)
 }
 
-# Set growth model function
-GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, datasetname = 'ukcp18', precipname = 'None', radname = 'None', Dt = 14, Tbase = 0, GAItab = NULL, HarvestJday = 243){
+load_AWC_no_agg <- function(X, Y, loc, dims){
+coords <- expand.grid(as.numeric(X), as.numeric(Y))
+dat_SP <- SpatialPoints(coords, proj4string = CRS("+init=epsg:27700"))
+## Read soils data, reproject and aggregate to coarser resolution
+ukgrid <- "+init=epsg:27700"
+latlong <- "+init=epsg:4326"
+AWCrast <- raster(loc)
+projection(AWCrast) <- projection(ukgrid)
+#AWCraster <- aggregate(AWCrast, 10, fun=mean)
+##print(AWCraster)
+##print(dim(AWCraster))
+## Extract soil AWC per grid cell - constant over time. 
+## Below function regrids the AWC data on to the model grid
+AWC <- array(extract(AWCrast,  dat_SP, fun = mean, na.rm = TRUE), dims)
+return(AWC)
+}
 
-  print('Using UKCP18 data, units:')
-  print('Temperature: Celsius')
-  if (precipname %in% "aphrodite") {
-    print('Using aphrodite for precip, units mm')
-  } else {
-    print('Precip: mm')
+# Set growth model function
+GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 'ukcp18', precipname = 'None', radname = 'None', Dt = 14, Tbase = 0, GAItab = NULL, HarvestJday = 243){
+
+  if (datasetname %in% "ukcp18") {
+    print('Using UKCP18 data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: mm')
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
   }
-  if (grepl('ceres', radname, fixed=TRUE)) {
-    print('Using ceres for solar rad, units W/m^2')
-  } else {
-    print('Solar rad: W/m^2')
+  if (datasetname %in% "ukcp18bc") {
+    print('Using UKCP18 Bias Corrected (CHESS-SCAPE) data, units:')
+    print('Temperature: Converting from Kelvin to Celsius')
+    tmean <- tmean - 273.15                                             
+    tmax <- tmax - 273.15
+    tmin <- tmin - 273.15 ## all Kelvin --> Celsius
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
   }
+  
   ## These conversions only necessary for era5 data
   if (datasetname %in% "era5") {
     print('Using era5 data, units:')
@@ -162,10 +201,12 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, datasetname = 'ukcp1
   ##print(dimnames(tmean)[[3]])
   
   ## Convert OScoordinates to latitudes
-  coords <- expand.grid(as.numeric(X), as.numeric(Y))
-  dat_SP <- SpatialPoints(coords, proj4string = CRS("+init=epsg:27700"))
-  dat_SP_LL <- spTransform(dat_SP, CRS(latlong))
-  lats <- matrix(coordinates(dat_SP_LL)[,2], nrow = dim(tmean)[1], ncol= dim(tmean)[2])
+  ##coords <- expand.grid(as.numeric(X), as.numeric(Y))
+  ##print(X)
+  ##print(Y)
+  ##dat_SP <- SpatialPoints(coords, proj4string = CRS("+init=epsg:27700"))
+  ##dat_SP_LL <- spTransform(dat_SP, CRS(latlong))
+  ##lats <- matrix(coordinates(dat_SP_LL)[,2], nrow = dim(tmean)[1], ncol= dim(tmean)[2])
   
   ## Julian days
   Jday <- as.POSIXlt(strptime(T, format = "%Y%m%d"))$yday + 1
@@ -331,7 +372,7 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, datasetname = 'ukcp1
   ##print(Y)
   
   #print(GAI[50,50,])
-  data <- list('GAI'=GAI, 'tmean'=tmean, 'prec'=prec, 'solarrad'=solarrad, 'dat_SP'=dat_SP, 'Jarray'=Jarray, 'Cday'=Cday, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'CDD'=CDD, 'TT'=TT, 'x'=X, 'y'=Y, 't'=dates)
+  data <- list('GAI'=GAI, 'tmean'=tmean, 'prec'=prec, 'solarrad'=solarrad, 'Jarray'=Jarray, 'Cday'=Cday, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'CDD'=CDD, 'TT'=TT, 'x'=X, 'y'=Y, 't'=dates)
   return(data)
 }
         ## AFAIK GAI=LAI
@@ -341,20 +382,39 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, datasetname = 'ukcp1
 
 GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetname = 'ukcp18', precipname = 'None', radname = 'None', Dt = 14, Tbase = 0, GAItab = NULL, HarvestJday = 243){
 
-
-  print('Using UKCP18 data, units:')
-  print('Temperature: Celsius')
-  if (precipname %in% "aphrodite") {
-    print('Using aphrodite for precip, units mm')
-  } else {
-    print('Precip: mm')
+  ## Handle unit conversions
+  if (datasetname %in% "ukcp18") {
+    print('Using UKCP18 data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: mm')
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
   }
-  if (grepl('ceres', radname, fixed=TRUE)) {
-    print('Using ceres for solar rad, units W/m^2')
-  } else {
-    print('Solar rad: W/m^2')
+  if (datasetname %in% "ukcp18bc") {
+    print('Using UKCP18 Bias Corrected (CHESS-SCAPE) data, units:')
+    print('Temperature: Converting from Kelvin to Celsius')
+    tmean <- tmean - 273.15                                             
+    tmax <- tmax - 273.15
+    tmin <- tmin - 273.15 ## all Kelvin --> Celsius
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
   }
-  ## These conversions only necessary for era5 data
   if (datasetname %in% "era5") {
     print('Using era5 data, units:')
     print('Temperature, converting Kelvin to Celsius')
@@ -374,7 +434,6 @@ GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetnam
       print('Using ceres for solar rad, units W/m^2')
     }
   }
-
 
   ## Defaults for testing for this and wheat_yield function
   ##GAItab = NULL

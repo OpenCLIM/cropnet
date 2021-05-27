@@ -1,14 +1,17 @@
-import geopandas as gpd
-import pandas as pd
+import os
+import time
+import glob
 import pyproj
 import requests
-import time
-import os
-import urllib.request
-import glob
-import datetime as dt
+import numpy as np
 import xarray as xr
+import pandas as pd
+from utils import *
 import cftime as cft
+import datetime as dt
+import urllib.request
+import geopandas as gpd
+
 
 def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H'):
     '''
@@ -180,18 +183,21 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
         latlon = pd.read_csv(filein, header=None, usecols=[3], nrows=1).values[0][0]
         lat = float(latlon.split('S')[0].split('L')[1][2:])
         lon = float(latlon.split('S')[0].split('L')[2][2:])
+        #print(lon,lat)
 
         # Convert to OSGB
-        proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
+        proj = pyproj.Transformer.from_crs(4326, 27700, always_xy=True)
         try:
             x,y = proj.transform(lon,lat, errcheck=True)
         except pyproj.exceptions.ProjError:
             x,y = proj.transform(lon,lat, errcheck=True)
+        #print(x,y)
 
         # Set name of column for data table
         colname = str(x).split('.')[0] + ',' + str(y).split('.')[0]
         coord = [int(str(x).split('.')[0]), int(str(y).split('.')[0])]
         obscoords.append(coord)
+        #print(coord)
 
         # Read in data file and do a whole load of nasty date wrangling
         pixel = pd.read_csv(filein, header=None, index_col=0, usecols=[2,6], names=['date', colname], na_values='F')
@@ -233,3 +239,174 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
         obspdall.loc[seldates] = obspdall.loc[seldates].where(obspdall.loc[seldates]>thresh)
 
     return obspdall, obscoords
+
+
+def get_S2tilebounds(S2dir):
+    tiles = ['30UYE', '30UYD', '30UYC', '30UYB',
+             '30UXE', '30UXD', '30UXC', '30UXB',
+             '30UWE', '30UWD', '30UWC', '30UWB']
+    
+    tilebounds = {}
+    for tile in tiles:
+        testtile = glob.glob(os.path.join(S2dir, '*' + tile + '*'))[0]
+        testtilexr = xr.open_rasterio(testtile)
+        
+        xcoords = testtilexr['x'].values
+        ycoords = testtilexr['y'].values
+        xcoords = np.sort(xcoords)
+        ycoords = np.sort(ycoords)
+        xres = xcoords[1]-xcoords[0]
+        yres = ycoords[1]-ycoords[0]
+    
+        xbounds = [xcoords[0]-xres/2, xcoords[-1]+xres/2]
+        ybounds = [ycoords[0]-yres/2, ycoords[-1]+yres/2]
+        tilebounds[tile] = [xbounds, ybounds]
+    return tilebounds
+
+
+def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-31", cloudthresh=40, fieldno=None):
+
+    print('Getting S2 tile bounds')
+    tilebounds = get_S2tilebounds(S2dir)
+    tiles = ['30UYE', '30UYD', '30UYC', '30UYB',
+             '30UXE', '30UXD', '30UXC', '30UXB',
+             '30UWE', '30UWD', '30UWC', '30UWB']
+
+    if yieldfile:
+        print('Reading in yields')
+        # Read in shapefile containing yield data into geopandas dataframe
+        obsyields = gpd.read_file(yieldfile)
+
+        # Extract out the geometries and find the 'center' coordinates of each field
+        if fieldno:
+            fieldIDs = [list(obsyields['field_id'])[fieldno-1]]
+            obscoordsxy = [[point.coords[0] for point in list(obsyields.centroid.values)][fieldno-1]]
+        else:
+            fieldIDs = list(obsyields['field_id'])
+            obscoordsxy = [point.coords[0] for point in list(obsyields.centroid.values)]
+        print(fieldIDs)
+        print(obscoordsxy)
+        
+        # Convert these to Sentinel2 coords
+        UTM30U = pyproj.CRS("+proj=utm +zone=30U, +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        OSGB = pyproj.CRS(init='epsg:27700')
+        OSGBtoUTM30U = pyproj.Transformer.from_crs(OSGB, UTM30U)
+        # this try/except block is to get around a weird pyproj error/bug where it fails
+        # for the first transformation but not subsequent ones in a code block
+        try:
+            obscoordsUTM30 = [OSGBtoUTM30U.transform(x,y, errcheck=True) for x,y in obscoordsxy]
+        except pyproj.exceptions.ProjError:
+            obscoordsUTM30 = [OSGBtoUTM30U.transform(x,y, errcheck=True) for x,y in obscoordsxy] 
+        print(obscoordsUTM30)
+
+        # repeat the top row at the bottom to get around the same pyproj error
+        # for some reason this means we also have to reset the crs info on the dataframe
+        obsyieldstemp = obsyields.append(obsyields.iloc[0,:])
+        temp = obsyields.crs
+        obsyieldstemp.crs = temp
+
+        obsyieldsUTM30 = obsyieldstemp.to_crs(epsg=32630).iloc[1:,:]
+        obsyieldsUTM30 = obsyieldsUTM30.iloc[[-1],:].append(obsyieldsUTM30.iloc[:-1,:])
+
+        sfUTM30name = yieldfile[:-4] + 'UTM30.shp'
+        if not os.path.exists(sfUTM30name):
+            obsyieldsUTM30.to_file(sfUTM30name)
+
+        print('Creating pandas table to store LAI data in')
+        # create the pandas table to store the data in
+        # index (rows)
+        # generate list of dates
+        tempindex = list(pd.date_range(startdate, enddate))
+        # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
+        tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
+        tempindex3 = list(pd.DatetimeIndex(tempindex2))
+        # remove duplicate 30ths
+        tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
+        # convert to 360day-calendar datetime index
+        cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
+        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+        # column names (the OSGB coords, minus all the digits after the decimal points)
+        colnames = [str(x).split('.')[0] + ',' + str(y).split('.')[0] for x,y in obscoordsxy]
+        # dataframe
+        LAIall = pd.DataFrame(index=cfdatetimesidx, columns=colnames)
+
+        totalfields = len(fieldIDs)
+        for fID in range(0, totalfields):
+            print('Processing field ' + str(fID+1) + ' of ' + str(totalfields))
+            tfccs2 = obscoordsUTM30[fID]
+            print(tfccs2)
+            
+            # find what S2 tile this field is in
+            for tile in tiles:
+                if tilebounds[tile][0][1] > tfccs2[0] > tilebounds[tile][0][0]:
+                    if tilebounds[tile][1][1] > tfccs2[1] > tilebounds[tile][1][0]:
+                        fieldtile = tile
+                        print('Field in tile ' + fieldtile)
+                        break
+
+            # read in the tile (for each timestep) and subset to field
+            fieldtiles = glob.glob(os.path.join(S2dir, '*' + fieldtile + '*'))
+            for ftile in fieldtiles:
+                print('Processing ' + os.path.basename(ftile) + ' for field ' + str(fID+1) + ' of ' + str(totalfields))
+                data = xr.open_rasterio(ftile)
+                test = country_subset_shapefile(data=data, sfname=sfUTM30name, IDname='field_id', IDs=[fieldIDs[fID]])
+                maskedtest = test/1000.
+                maskedtest = xr.where(maskedtest < 10, maskedtest, np.nan)
+                maskedtest = xr.where(maskedtest > 0, maskedtest, np.nan)
+
+                # calculate % of field that is not covered by cloud
+                # then only use value if % is > 40% or something
+                nfieldpoints = xr.where(np.isnan(test), np.nan, 1).sum().values
+                nunmasked = xr.where(np.isnan(maskedtest), np.nan, 1).sum().values
+                percentunmasked = (nunmasked/nfieldpoints)*100
+                print(str(percentunmasked) + '% of field is not covered by cloud')
+
+                if percentunmasked > cloudthresh:
+                    fieldavgLAI = maskedtest.mean().values
+                else:
+                    fieldavgLAI = np.nan
+                
+                obsdate = os.path.basename(ftile).split('_')[1][:8]
+                year = obsdate[:4]
+                month = obsdate[4:6]
+                day = obsdate[6:8]
+                if int(day) > 30:
+                    obsdate = year+month+'30'
+                
+                LAIall.loc[obsdate,colnames[fID]] = fieldavgLAI
+                LAIall.to_csv('field_' + str(fieldno) + '.csv')
+    return LAIall
+
+
+def S2_readin(filein):
+    '''
+    Read in csv file of all fields to run for into pandas table 
+    like the one produced in the above function
+    '''
+
+    allfields = pd.read_csv(filein, index_col=0, parse_dates=True)
+    coordstemp = list(allfields.columns.values)
+    coords = [[c.split(',')[0], c.split(',')[1]] for c in coordstemp]
+
+    # create index with all the days of the 360day calendar (including Feb 29th, 30th)
+    d = allfields.index[0]
+    startdate = cft.Datetime360Day(d.year, d.month, d.day)
+    e = allfields.index[-1]
+    enddate = cft.Datetime360Day(e.year, e.month, e.day)
+    alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
+
+    # convert index to 360day calendar datetimes
+    tempindex = list(pd.date_range(allfields.index[0], allfields.index[-1]))
+    # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
+    tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
+    tempindex3 = list(pd.DatetimeIndex(tempindex2))
+    # remove duplicate 30ths
+    tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
+    # convert to 360day-calendar datetime index
+    cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
+    cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+    allfields.index = cfdatetimesidx
+
+    allfields = allfields.reindex(alldaysidx)    
+                                            
+    return allfields, coords

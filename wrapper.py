@@ -31,6 +31,7 @@ assimvar = 'fPAR'
 dataloc = "/data/UKCP18/RCM_12km/daily_timeseries/downloaded_data/**/*.nc"
 
 # names of the driving data variables to use
+# CURRENTLY NOT IMPLEMENTED - TO DO
 varnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
 
 # location and filename of elevation data
