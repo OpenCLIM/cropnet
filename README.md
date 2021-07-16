@@ -1,18 +1,19 @@
-CropNET Data Assimilation tool for UKCP18 wheat yield projections
------------------------------------------------------------------
+CropNET Models with Data Assimilation 
+-------------------------------------
 
 Overview
 --------
-This tool produces estimates of crop yield using a wheat crop model and MODIS or Sentinel2 LAI (leaf-area-index) satellite data,
-for each pixel satellite data is provided for. The final product is NOT gridded. This is under development. 
-The crop model produces estimates of potential yield, which are usually higher than the actual, measured yields.
-The crop model is therefore combined with satellite derived measures of crop growth to produce more accurate values.
+This tool produces estimates of potential yield using a grass or wheat crop model.
+Optionally, MODIS or Sentinel2 LAI (leaf-area-index) satellite data may be used to improve the model yield, for wheat only.  
+If assimilation is used, the final product is NOT gridded as it is done on a pointwise basis. This is under development.
+
+If assimilation is used:
 For a year of the UKCP18 driving (meteorological) data that we also have satellite data for:
 - The satellite data is requested and downloaded if necessary (MODIS)
 - The raw satellite data is downloaded and processed to produce LAI estimates on a 20mx20m grid (Sentinel2)*
 - The grids are processed to produce field-scale estimates of LAI where there are enough non-cloud pixels (Sentinel2)*
 - The modelled GAI over the year is calculated for each ensemble member
-- The ensemble variance is used to generate a baseline estimate of the uncertainty in the modelled GAI (optional)
+- The driving data ensemble variance is used to generate a baseline estimate of the uncertainty in the modelled GAI (optional)
 - A variational data assimilation method is applied to the timeseries of the satellite LAI at each pixel (MODIS) or field (Sentinel2) downloaded
   and the model GAI for the corresponding grid point within which it resides. This produces an optimum, smoothed
   timeseries that is the best guess of the true GAI, given the errors associated with the model and the observed values.
@@ -60,31 +61,51 @@ They are user configurable, but change them at your peril!!
 
 Data requirements
 -----------------
-The code has been designed to work with UKCP18 data, but in theory any ensemble meteorological driving data can be used, 
-provided it is in a similar format to the UKCP18 data. Note though, that this has not been tested.
-The UKCP18 data that the model has been tested with is available on the CEDA archive at 
+The code has been designed to work with UKCP18 or ERA5 data, with the optional addition of APHRODITE precipitation data 
+for running over China.
+12km UKCP18 data is available on the CEDA archive at 
 https://catalogue.ceda.ac.uk/uuid/589211abeb844070a95d061c8cc7f604
-The format requirements are:
- - The daily variables required are total precipitation in mm (pr), maximum 2m temperature in degC (tasmax),
-minimum 2m temperature in degC (tasmin), average net surface shortwave radiation in W/m^2 (rss), average 2m temperature in degC 
-(tas).
- - The variable names are user editable using the variable 'varnames', but the varnames specified must be both in the filenames 
-and the name of the variables within the netcdf files. 
- - The end of each filename must also be written _nn_day_startdate_enddate.nc with startdate and enddate formatted yyyymmdd. 
-nn is the ensemble number, but can be any number string, so long as these are input to the code using the 'ensmems' variable.
-- The data must be on an x,y grid where x and y are OSGB eastings and northings. The variable names of the x and y
-variables must be projection_x_coordinate and projection_y_coordinate. 
-- The data must be on a 360day calendar.
+ERA5 data is available from the copernicus climate data store:
+https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
+APHRODITE data is available from:
+http://aphrodite.st.hirosaki-u.ac.jp/
+There are switches in the code that allows you to specify whether UKCP18 or ERA5 data is being used, and whether you want to
+use APHRODITE precipitation data. The variable names, filenames and coordinate names are all preset for these datasets.
+If you are using ERA5 you will need to apply a daily average or sum (as appropriate) to the downloaded data. There is an option
+to do this automatically in the code, but this feature should be considered as under development.
+If you wish to use a different meteorological driving dataset you can edit the 'getnames' function in utils.py.
+This is also under development, however.
+The data required by the models are:
+Wheat:
+- Daily precipitation
+- Daily maximum temperature
+- Daily minimum temperature
+- Daily mean temperature
+- Daily average net solar radiation
+Grass:
+- Daily precipitation
+- Daily maximum temperature
+- Daily minimum temperature
+- Daily mean temperature
+- Daily average surface air pressure
+- Daily average net solar radiation
+- One of: daily mean dewpoint temperature or relative humidity
+- One of: daily mean windspeed, or daily mean x and y components of windspeed
 
-Available Water Content (AWC) is also required by the model. This data is provided as a geotiff in the 'MaxWet1.tif' and 
-'MaxWet1.tfw' files. The data was derived from the UKCEH Grid-to-Grid model, taking the difference between the max and min
+Available Water Content (AWC) is also required by the model. This data is provided for the UK as a geotiff in the 'MaxWet1.tif' 
+and 'MaxWet1.tfw' files. The data was derived from the UKCEH Grid-to-Grid model, taking the difference between the max and min
 soil moisture content at each (1km) grid point over the UK from a multi-year simulation. 
+For China, data can be obtained using the 'get_AWC_China.sh' bash script. 
 
 Annual CO2 concentration is an optional requirement. This is provided in the 'UKCP18_CO2_RCP85.csv' file.
 
 If you wish to verify the yield produced by the assimilation, you will need to set the verify switch to 1 and 
 supply yield data in the form of a shapefile containing the polygons of each field with coordinates in OSGB eastings 
 and northings. We cannot supply this data due to confidentiality arrangements with the data suppliers. 
+
+Crop and irrigation maps are also available for use in the code for China in the wheatmapchina.nc and 
+wheat_irrigated_proportion.nc files. They were generated from MAPSPAM data, example code for generating
+equivalent maps for other areas is in the verdant.ipynb notebook.
 
 
 Running the code
@@ -95,6 +116,9 @@ The easiest way to install these is to use anaconda - a package management syste
 Anaconda installs packages in your home directory, and can be managed separately to any other python/R installations
 you have, i.e. it won't interfere with these, and can be enabled only when you want to run this programme.
 See below for instructions on installing and using anaconda.
+
+For examples of how to run the code without assimilation, and to produce spatial plots of the outputs, see verdant.ipynb.
+For examples of how to run the code with assimilation, and how to verify the results, see assimilation_demo.ipynb.
 
 MODIS
 -----
@@ -143,11 +167,11 @@ Once you have the UTM grid code and times of the tiles you want to download and 
 'sbatch_multiplot_template' files, each with inputs spanning one month and UTM grid code, and submit these all to a cluster.
 
 
-
-The final output of the code will be the original, modelled yield and the updated, assimilated yield in xarray datasets,
-which are similar in structure to netcdf files. The data will also be saved on disk as netcdf files. The datasets will
-have one variable per obs pixel, with the name of the variable the x,y coordinates in OSGB eastings/northings. Each
-variable will have ensemble member and year dimensions.
+The final output of the code when assimilation is used will be the original, modelled yield and the updated, assimilated yield in
+ xarray datasets, which are similar in structure to netcdf files. The data will also be saved on disk as netcdf files. 
+The datasets will have one variable per obs pixel, with the name of the variable the x,y coordinates in OSGB eastings/northings. 
+Each variable will have ensemble member and year dimensions.
+If data assimilation is not used, the outputs will be gridded on the same grid as the input meteorological driving data. 
 
 For information on the other user configurable variables, outputs and internal functions, see the comments written in the
 notebook and scripts. 

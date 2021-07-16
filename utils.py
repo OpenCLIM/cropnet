@@ -484,6 +484,29 @@ def getnames(basedatasetname, precipname, radname, crop):
     '''
     Generate the file, variable and dictionary names associated
     with each dataset.
+    Users can edit this function to set up the code to use new meteorological driving datasets
+    - fnames are the variable names that appear in the filenames
+    - vnames are the variable names in the netcdf files
+    - dnames are the variable names that the code uses to refer to different variables.
+      For the following variables, the corresponding dname should be set to:
+      precipitation: prec
+      Max temperature: tmax
+      Min temperature: tmin
+      Relative humidity: rh
+      Solar radiation: solarrad
+      x component of wind speed: uwind
+      y component of wind speed: vwind
+      Wind speed: wind
+      Mean temperature: tmean
+      Dew point temperature: tdp
+      Surface air pressure: sfcP
+    - xnames are the variable names of the x coordinate of each variable
+    - ynames are the variable names of the y coordinate of each variable
+    - tnames are the variable names of the t coordinate of each variable
+    For xnames, ynames and tnames, if all variables have the same coordinate variables, the 
+    coordinate variable name can just be listed once.
+    For the other lists, the order of the variables must be the same, i.e. the first item 
+    in the lists corresponds to the same variable, the second items to another etc. 
     '''
     
     if basedatasetname == 'ukcp18':
