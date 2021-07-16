@@ -991,7 +991,7 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
         prior_p_ensstd = xr.load_dataset(infile)
     elif moderrswitch==0:
         prior_p_ensstd = prior_p_all.std(axis=0)
-    
+        prior_p_ensstd.to_netcdf(os.path.join(saveloc, datasetname + '_' + str(year) + 'ensstd.nc'))
     del tmean1
     del prec1
     del solarrad1

@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 numpy2ri.activate()
+from S2_TOA_TO_LAI import TOA2LAI_S2
 #from memory_profiler import profile
 
 
@@ -24,7 +25,7 @@ crop = 'wheat'
 datasetname = 'ukcp18'
 precname = 'None'
 radname = 'None'
-assimvar = 'fPAR'
+assimvar = 'LAI'
 
 # location of the driving data netcdf files. Must encompass the time range specified 
 # Use wildcards to match all the required data files. '**' means every directory 

@@ -3,22 +3,27 @@ CropNET Data Assimilation tool for UKCP18 wheat yield projections
 
 Overview
 --------
-This tool produces estimates of crop yield using a wheat crop model and MODIS2 LAI (leaf-area-index) satellite data.
+This tool produces estimates of crop yield using a wheat crop model and MODIS or Sentinel2 LAI (leaf-area-index) satellite data,
+for each pixel satellite data is provided for. The final product is NOT gridded. This is under development. 
 The crop model produces estimates of potential yield, which are usually higher than the actual, measured yields.
 The crop model is therefore combined with satellite derived measures of crop growth to produce more accurate values.
-For a year of the UKCP18 driving (meteorlogical) data that we also have satellite data for:
-- The satellite data is requested and downloaded if necessary
+For a year of the UKCP18 driving (meteorological) data that we also have satellite data for:
+- The satellite data is requested and downloaded if necessary (MODIS)
+- The raw satellite data is downloaded and processed to produce LAI estimates on a 20mx20m grid (Sentinel2)*
+- The grids are processed to produce field-scale estimates of LAI where there are enough non-cloud pixels (Sentinel2)*
 - The modelled GAI over the year is calculated for each ensemble member
-- The ensemble variance is used to generate a baseline estimate of the uncertainty in the modelled GAI
-- A variational data assimilation method is applied to the timeseries of the satellite LAI at each pixel downloaded
+- The ensemble variance is used to generate a baseline estimate of the uncertainty in the modelled GAI (optional)
+- A variational data assimilation method is applied to the timeseries of the satellite LAI at each pixel (MODIS) or field (Sentinel2) downloaded
   and the model GAI for the corresponding grid point within which it resides. This produces an optimum, smoothed
   timeseries that is the best guess of the true GAI, given the errors associated with the model and the observed values.
   See below for more details on the method.
 - The optimal GAI timeseries is fed back in to the crop model and used to calculate a new yield value
 
+* These steps are not automatic and have to be run separately, ideally on a cluster such as JASMIN LOTUS. 
+
+TO BE IMPLEMENTED:
 Once this is complete, the average correction factor vector is calculated over each year and ensemble member, for each
 observation pixel used.
-TO BE IMPLEMENTED:
 Using the data assimilation for future years, using a simple linear regression approach, or machine learning to tailor the
 assimilation to each field. 
 
@@ -33,8 +38,8 @@ exist and c) a smoothed version of the timeseries itself, to find the optimum ti
 The strength of each constraint is dependent on the errors (variances) associated with each timeseries. The smaller the
 error, the more strongly the optimal timeseries is pulled towards the timeseries. These are user configurable.
 By default, the error in the modelled timeseries is assumed to be the variance of the ensemble. There is a multiplier (default 1)
-that can be changed to account for errors in the model not accounted for by errors in the meteorlogical driving data. 
-The error in the observed timeseries/points is assumed to be 0.1 regardless of the magnitude of the observation. This
+that can be changed to account for errors in the model not accounted for by errors in the meteorological driving data. 
+The error in the observed timeseries/points is assumed to be 0.4 regardless of the magnitude of the observation. This
 absolute error can be switched to a percentage error, whereby the error is assumed to be, e.g. 10% of the obs value.
 However, in testing it was found that the absolute error produces much smoother results, particularly early on in the
 timeseries when the observation values are small.
@@ -91,6 +96,9 @@ Anaconda installs packages in your home directory, and can be managed separately
 you have, i.e. it won't interfere with these, and can be enabled only when you want to run this programme.
 See below for instructions on installing and using anaconda.
 
+MODIS
+-----
+If using MODIS satellite data, then everything can be run from the wrapper script or notebook. There are extra steps if using S2.
 The code can either be run from a python script or a jupyter notebook. If you have not heard of the latter, then it
 is probably easier to use the former.
 To run from the script:
@@ -111,6 +119,30 @@ The code is set up to run for the x,y coordinates specified by the obscoords var
 for each UKCP18 ensemble member. To download the required MODIS LAI data for assimilation set obs=1.
 After this, if the xy coords and years have not been changed, the obs switch can be set to 2, so that it uses what is already
 downloaded. 
+
+Sentinel2
+---------
+If using Sentinel2 satellite data, there are separate steps that need to be taken before running the main wrapper:
+1 - Downloading of the raw satellite data and calculating the LAI from this using the Sensor Invariate Atmospheric Correct (SIAC)
+    and S2_TOA_TO_LAI python packages which are included in this repo
+2 - Subsetting the produced LAI tiles to obtain field-scale LAI values
+
+If running for more than a handful of fields, step 1 will need to be run in parallel on a cluster, otherwise it will take 
+many days. Example scripts have been provided for the JASMIN LOTUS cluster - S2LAIwrapper.py, the python script that does
+the processing and sbatch_multiplot_template which submits the python script to the cluster and contains the job-control settings.
+The S2LAIwrapper.py script is set up to take values for the S2 UTM grid code, year and month as inputs and download all matching 
+tiles. The S2 UTM grid code is the code given to the specific projected-coordinate grid of each of the 100x100km tiles that all 
+Sentinel2 data is split into. The easiest way to find the one you want is to go to:
+https://s2.boku.eodc.eu/ and click on 'pick from the map' then click where you want to download, then 'Find'. In the list of files
+you can see the tile name as one of the columns. It may be that there are several tiles that cover the point you have clicked on,
+you can see the area spanned by each of them by clicking on the row containing the tile of interest. It is also better to narrow
+the date range a little before clicking 'Find', otherwise it will return tiles from the entire catalogue, which can get quite slow
+Sometimes the 100x100km tiles are truncated diagonally for some reason, so you may have to click through a few to find a square
+one that is actually representative of the area usually encompassed by that tile/UTM grid code. 
+Once you have the UTM grid code and times of the tiles you want to download and process, generate several
+'sbatch_multiplot_template' files, each with inputs spanning one month and UTM grid code, and submit these all to a cluster.
+
+
 
 The final output of the code will be the original, modelled yield and the updated, assimilated yield in xarray datasets,
 which are similar in structure to netcdf files. The data will also be saved on disk as netcdf files. The datasets will
