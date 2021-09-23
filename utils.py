@@ -559,6 +559,14 @@ def getnames(basedatasetname, precipname, radname, crop):
             xnames = ['x']
             ynames = ['y']
             tnames = ['time']
+    elif basedatasetname == 'chess_and_haduk':
+        if crop == 'wheat':
+            fnames = ['precip', 'tasmax', 'tasmin', 'netsolar', 'tasmean']
+            vnames = fnames
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['x']
+            ynames = ['y']
+            tnames = ['time']
 
     if len(xnames)==1:
         xnames2 = [xnames[0] for n in fnames]
