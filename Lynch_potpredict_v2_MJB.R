@@ -722,7 +722,12 @@ wheat_yield <- function(GAI, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, Harv
           WUyield <- (WUyield/1.15 - wloss) * 1.15
         }
 
-
+        HDD <- ifelse(tmin > 30, tmin-30,
+                      ifelse(tmax < 30, 0,
+                             ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
+        CHDD <- aperm(apply(HDD, 1:2, cumsum), c(2,3,1))
+        WLyield <- WLyield - (WLyield/100 * CHDD)
+        WUyield <- WUyield - (WUyield/100 * CHDD)
         
         ###### Account for failure to flower pre-harvest!
         ## This doesn't work if we only run for part of the growing season.
@@ -835,7 +840,13 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, prec, solarrad, AWC, Jar
           WUyield <- array(WUyield)
         }
         
-
+        HDD <- ifelse(tmin > 30, tmin-30,
+                      ifelse(tmax < 30, 0,
+                             ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
+        CHDD <- cumsum(HDD)
+        WLyield <- WLyield - (WLyield/100 * CHDD)
+        WUyield <- WUyield - (WUyield/100 * CHDD)
+        
         ###### Account for failure to flower pre-harvest!
         ## moved to yield function so that we can calculate GAI for subsets of the growing year
         ##WLPyield[array(max(CDD),dim(CDD)) < (TT[1] + TT[2] + TT[3] + TT[4])] <- 0
