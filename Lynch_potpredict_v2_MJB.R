@@ -141,6 +141,25 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 
       print('Solar rad: W/m^2')
     }
   }
+
+
+  if (datasetname %in% "chess_and_haduk") {
+    print('Using chess-met and HadUK data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
+  }  
+
+
   
   ## These conversions only necessary for era5 data
   if (datasetname %in% "era5") {
@@ -415,6 +434,21 @@ GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetnam
       print('Solar rad: W/m^2')
     }
   }
+  if (datasetname %in% "chess_and_haduk") {
+    print('Using chess-met and HadUK data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2')
+    } else {
+      print('Solar rad: W/m^2')
+    }
+  }  
   if (datasetname %in% "era5") {
     print('Using era5 data, units:')
     print('Temperature, converting Kelvin to Celsius')
@@ -839,7 +873,8 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, prec, solarrad, AWC, Jar
           WLyield <- array(WLyield)
           WUyield <- array(WUyield)
         }
-        
+
+        ## Heat stress correction
         HDD <- ifelse(tmin > 30, tmin-30,
                       ifelse(tmax < 30, 0,
                              ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
