@@ -677,7 +677,7 @@ GAI_point<- function(tmean, tmax, tmin, prec, solarrad, X, Y, lat, T, datasetnam
 
 
 
-wheat_yield <- function(GAI, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, X, Y, cconc=NULL, waterlog=1, noflower=1, irr=0, irrdata=NULL, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
+wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, X, Y, cconc=NULL, waterlog=1, noflower=1, irr=0, irrdata=NULL, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
 
     
         LI <- 1-exp(-0.5*GAI)
@@ -795,8 +795,8 @@ wheat_yield <- function(GAI, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, Harv
 }
 
 
-## as wheat_yield but for point driving data
-wheat_yield_point <- function(GAI, LI, assimvar, tmean, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, cconc=NULL, waterlog=1, noflower=1, irrprop=0, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
+## as wheat_yield but with heat stress correction and for point driving data
+wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, cconc=NULL, waterlog=1, noflower=1, irrprop=0, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
 
         ## If we're not assimilating LI need to calculate it from the assimilated GAI
         if (!(assimvar %in% "fPAR")) {    
