@@ -391,7 +391,7 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 
   ##print(Y)
   
   #print(GAI[50,50,])
-  data <- list('GAI'=GAI, 'tmean'=tmean, 'tmin'=tmin, 'tmax'=tmax, prec'=prec, 'solarrad'=solarrad, 'Jarray'=Jarray, 'Cday'=Cday, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'CDD'=CDD, 'TT'=TT, 'x'=X, 'y'=Y, 't'=dates)
+  data <- list('GAI'=GAI, 'tmean'=tmean, 'tmin'=tmin, 'tmax'=tmax, 'prec'=prec, 'solarrad'=solarrad, 'Jarray'=Jarray, 'Cday'=Cday, 'GSS'=GSS, 'HarvestJday'=HarvestJday, 'CDD'=CDD, 'TT'=TT, 'x'=X, 'y'=Y, 't'=dates)
   return(data)
 }
         ## AFAIK GAI=LAI
