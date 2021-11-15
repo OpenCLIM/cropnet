@@ -152,13 +152,8 @@ def load_driving_data(basedatasetname, times,
         elif basedatasetname=='era5':
             AWCx = 'lon'
             AWCy = 'lat'
-            
-        if basedatasetname == 'ukcp18': 
-            loadAWC = r['load_AWC']
-            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
-            AWC = np.array(AWC).transpose(1,0,2)
-            AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
-        elif basedatasetname=='ukcp18bc':
+
+        if basedatasetname=='ukcp18bc' or basedatasetname=='chess_and_haduk':
             loadAWCnoagg = r['load_AWC_no_agg']
             AWC = loadAWCnoagg(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
             AWC = np.array(AWC).transpose(1,0,2)
@@ -172,6 +167,11 @@ def load_driving_data(basedatasetname, times,
                 AWCtemp['t'] = [ts]
                 AWClist.append(AWCtemp)
             AWC = xr.concat(AWClist, dim='t')
+        else:
+            loadAWC = r['load_AWC']
+            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
+            AWC = np.array(AWC).transpose(1,0,2)
+            AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
         AWC.to_netcdf('AWCbeforeinterp.nc')
 
         print('Interpolating AWC onto common grid')
@@ -553,8 +553,8 @@ def getnames(basedatasetname, precipname, radname, crop):
             ynames = ['y']
             tnames = ['time']
         elif crop == 'wheat':
-            fnames = ["pr", "tasmax", "tasmin", "rss", "tasmean"]
-            vnames = fnames
+            fnames = ["pr", "tasmax", "tasmin", "rss_bias_corrected", "tas"]
+            vnames = ['pr', 'tasmax', 'tasmin', 'rss', 'tas']
             dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
             xnames = ['x']
             ynames = ['y']
