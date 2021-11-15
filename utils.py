@@ -146,13 +146,12 @@ def load_driving_data(basedatasetname, times,
         interpdata = data
         interpx = 'x'
         interpy = 'y'
-        if basedatasetname=='ukcp18' or basedatasetname=='ukcp18bc':
-            AWCx = 'x'
-            AWCy = 'y'
-        elif basedatasetname=='era5':
+        if basedatasetname=='era5':
             AWCx = 'lon'
             AWCy = 'lat'
-
+        else:
+            AWCx = 'x'
+            AWCy = 'y'
         if basedatasetname=='ukcp18bc' or basedatasetname=='chess_and_haduk':
             loadAWCnoagg = r['load_AWC_no_agg']
             AWC = loadAWCnoagg(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
