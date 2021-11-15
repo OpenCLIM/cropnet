@@ -171,7 +171,6 @@ def load_driving_data(basedatasetname, times,
             AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
             AWC = np.array(AWC).transpose(1,0,2)
             AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
-        AWC.to_netcdf('AWCbeforeinterp.nc')
 
         print('Interpolating AWC onto common grid')
         AWC = AWC.interp({AWCx: interpdata[interpx], AWCy: interpdata[interpy]}, kwargs={"fill_value": None})
@@ -179,7 +178,6 @@ def load_driving_data(basedatasetname, times,
             AWC=AWC.drop([AWCx])
         if not AWCy==interpy:
             AWC=AWC.drop([AWCy])
-        AWC.to_netcdf('AWCafterinterp.nc')
 
         if mask==1:
             print('Masking AWC to ' + str(countries))
