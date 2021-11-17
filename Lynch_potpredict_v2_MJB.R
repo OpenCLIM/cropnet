@@ -762,7 +762,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
         print('Heat degree days dimensions:')
         print(dim(HDD))
         CHDD <- apply(HDD, 1:2, sum)
-        print('Summed heat degree days dimensions:'
+        print('Summed heat degree days dimensions:')
         print(dim(CHDD))
         print('Yield dimensions:')
         print(dim(WLyield))
