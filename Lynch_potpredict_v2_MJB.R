@@ -759,7 +759,13 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
         HDD <- ifelse(tmin > 30, tmin-30,
                       ifelse(tmax < 30, 0,
                              ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
-        CHDD <- aperm(apply(HDD, 1:2, cumsum), c(2,3,1))
+        print('Heat degree days dimensions:')
+        print(dim(HDD))
+        CHDD <- apply(HDD, 1:2, sum)
+        print('Summed heat degree days dimensions:'
+        print(dim(CHDD))
+        print('Yield dimensions:')
+        print(dim(WLyield))
         WLyield <- WLyield - (WLyield/100 * CHDD)
         WUyield <- WUyield - (WUyield/100 * CHDD)
         
@@ -878,7 +884,7 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarr
         HDD <- ifelse(tmin > 30, tmin-30,
                       ifelse(tmax < 30, 0,
                              ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
-        CHDD <- cumsum(HDD)
+        CHDD <- sum(HDD)
         WLyield <- WLyield - (WLyield/100 * CHDD)
         WUyield <- WUyield - (WUyield/100 * CHDD)
         
