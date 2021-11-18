@@ -766,8 +766,8 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
         print(dim(CHDD))
         print('Yield dimensions:')
         print(dim(WLyield))
-        WLyield <- WLyield - (WLyield/100 * CHDD)
-        WUyield <- WUyield - (WUyield/100 * CHDD)
+        WLHLyield <- WLyield - (WLyield/100 * CHDD)
+        WUHLyield <- WUyield - (WUyield/100 * CHDD)
         
         ###### Account for failure to flower pre-harvest!
         ## This doesn't work if we only run for part of the growing season.
@@ -775,12 +775,14 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
         if (noflower == 1) {
           WLyield[array(apply(CDD,1:2, max)) < (TT[1] + TT[2] + TT[3] + TT[4])] <- 0
           WUyield[array(apply(CDD,1:2, max)) < (TT[1] + TT[2] + TT[3] + TT[4])] <- 0
+          WLHLyield[array(apply(CDD,1:2, max)) < (TT[1] + TT[2] + TT[3] + TT[4])] <- 0
+          WUHLyield[array(apply(CDD,1:2, max)) < (TT[1] + TT[2] + TT[3] + TT[4])] <- 0          
         }
 
         ## Return water unlimited yield where irrigation is happening
-        finalyield <- WLyield
+        finalyield <- WLHLyield
         if (irr == 1) {
-          finalyield[which(irrdata > 0)] <- WUyield[which(irrdata > 0)]
+          finalyield[which(irrdata > 0)] <- WUHLyield[which(irrdata > 0)]
         }
     
         ## Convert final yield to raster
@@ -796,7 +798,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
 	##}
         ##print(WLPyield[100,100])
         
-        data <- list('finalyield'=finalyield, 'WUyield'=WUyield, 'WLyield'=WLyield, 'WU_Biomass'=WU_Biomass, 'WL_Biomass'=WL_Biomass, 'PAWC'=PAWC, 'AWC'=AWC, 'GAI'=GAI, 'tmean'=tmean, 'prec'=prec)
+        data <- list('finalyield'=finalyield, 'WUyield'=WUyield, 'WLyield'=WLyield, 'WLHLyield'=WLHLyield, 'WUHLyield'=WUHLyield, 'WU_Biomass'=WU_Biomass, 'WL_Biomass'=WL_Biomass, 'PAWC'=PAWC, 'AWC'=AWC, 'GAI'=GAI, 'tmean'=tmean, 'prec'=prec)
 	return(data)
 }
 
@@ -885,8 +887,8 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarr
                       ifelse(tmax < 30, 0,
                              ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
         CHDD <- sum(HDD)
-        WLyield <- WLyield - (WLyield/100 * CHDD)
-        WUyield <- WUyield - (WUyield/100 * CHDD)
+        WLHLyield <- WLyield - (WLyield/100 * CHDD)
+        WUHLyield <- WUyield - (WUyield/100 * CHDD)
         
         ###### Account for failure to flower pre-harvest!
         ## moved to yield function so that we can calculate GAI for subsets of the growing year
@@ -894,15 +896,17 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarr
         if (noflower == 1) {
           ifelse(max(CDD) < (TT[1] + TT[2] + TT[3] + TT[4]), WLyield <- 0, WLyield <- WLyield)
           ifelse(max(CDD) < (TT[1] + TT[2] + TT[3] + TT[4]), WUyield <- 0, WUyield <- WUyield)
+          ifelse(max(CDD) < (TT[1] + TT[2] + TT[3] + TT[4]), WLHLyield <- 0, WLHLyield <- WLHLyield)
+          ifelse(max(CDD) < (TT[1] + TT[2] + TT[3] + TT[4]), WUHLyield <- 0, WUHLyield <- WUHLyield)
         }
 
         if (irrprop > 0) {
-          finalyield <- WUyield
+          finalyield <- WUHLyield
         } else {
-          finalyield <- WLyield
+          finalyield <- WLHLyield
         }
         
-        data <- list('finalyield'=finalyield, 'WUyield'=WUyield, 'WLyield'=WLyield, 'WU_Biomass'=WU_Biomass, 'WL_Biomass'=WL_Biomass)
+        data <- list('finalyield'=finalyield, 'WUyield'=WUyield, 'WLyield'=WLyield, 'WUHLyield'=WUHLyield, 'WLHLyield'=WLHLyield, 'WU_Biomass'=WU_Biomass, 'WL_Biomass'=WL_Biomass)
 	return(data)
 }
 
