@@ -755,10 +755,12 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
           WLyield <- (WLyield/1.15 - wloss) * 1.15
           WUyield <- (WUyield/1.15 - wloss) * 1.15
         }
+	HDD <-  ifelse(tmin > 30, ((tmin + tmax)/2) -30,
+	    	ifelse(tmax < 30, 0,                                                                                                              ifelse(tmax >= 30, (((30 + tmax)/2) -30) * ((tmax-30)/(tmax-tmin)), 999)))
 
-        HDD <- ifelse(tmin > 30, tmin-30,
-                      ifelse(tmax < 30, 0,
-                             ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
+        #HDD <- ifelse(tmin > 30, tmin-30,
+        #              ifelse(tmax < 30, 0,
+        #                     ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
         print('Heat degree days dimensions:')
         print(dim(HDD))
         CHDD <- apply(HDD, 1:2, sum)
@@ -803,7 +805,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
 }
 
 
-## as wheat_yield but with heat stress correction and for point driving data
+## as wheat_yield for point driving data
 wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, cconc=NULL, waterlog=1, noflower=1, irrprop=0, FCO2=TRUE, RUE=3.1, WLP=117.7, savepath=NULL) {
 
         ## If we're not assimilating LI need to calculate it from the assimilated GAI
@@ -883,9 +885,12 @@ wheat_yield_point <- function(GAI, LI, assimvar, tmean, tmin, tmax, prec, solarr
         }
 
         ## Heat stress correction
-        HDD <- ifelse(tmin > 30, tmin-30,
-                      ifelse(tmax < 30, 0,
-                             ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
+	HDD <-  ifelse(tmin > 30, ((tmin + tmax)/2) -30,
+	    	ifelse(tmax < 30, 0,                                                                                                              ifelse(tmax >= 30, (((30 + tmax)/2) -30) * ((tmax-30)/(tmax-tmin)), 999)))
+
+        #HDD <- ifelse(tmin > 30, tmin-30,
+        #              ifelse(tmax < 30, 0,
+        #                     ifelse(tmax >= 30, (tmax-tmin/2)-30, 999)))
         CHDD <- sum(HDD)
         WLHLyield <- WLyield - (WLyield/100 * CHDD)
         WUHLyield <- WUyield - (WUyield/100 * CHDD)

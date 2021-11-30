@@ -317,10 +317,10 @@ def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
             alldata_p['wind'] = np.sqrt(alldata_p['uwind']**2 + alldata_p['vwind']**2)
         
     elif crop=='wheat':
-        if basedatasetname=='ukcp18' or basedatasetname=='ukcp18bc':
+        if basedatasetname=='ukcp18bc' or basedatasetname=='chess_and_haduk':
             # The load_AWC function will pull out the x,y coords supplied, using aggregation and averaging
             # The AWC data doesn't have to be on the same grid as the other data
-            loadAWC = r['load_AWC']
+            loadAWC = r['load_AWC_no_agg']
             AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].values.squeeze().transpose(2,1,0).shape))
             AWC = np.array(AWC).squeeze()
             alldata['AWC'] = xr.DataArray(AWC, coords=[('x', x), ('y', y), ('time', np.arange(0, len(times)))])
@@ -336,6 +336,12 @@ def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
             AWC = xr.concat(AWClist, dim='t')
             AWC = AWC.interp({'lon': data['x'], 'lat': data['y']})
             alldata['AWC'] = AWC
+            alldata_p = format_point_data(coords, ['AWC'], alldata, times, alldata_p)
+        else:
+            loadAWC = r['load_AWC']
+            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].values.squeeze().transpose(2,1,0).shape))
+            AWC = np.array(AWC).squeeze()
+            alldata['AWC'] = xr.DataArray(AWC, coords=[('x', x), ('y', y), ('time', np.arange(0, len(times)))])
             alldata_p = format_point_data(coords, ['AWC'], alldata, times, alldata_p)
             
     if CO2file:
@@ -410,9 +416,10 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
                             '-' + times[-1] + '.nc')
     if os.path.exists(savefile):
         genswitch = 0
-        print('Driving data file already exists, skipping generation')
+        print('Driving data file ' + savefile + ' already exists, skipping generation')
     else:
         genswitch = 1
+        print('Producing driving data file ' + savefile)
 
     if genswitch == 1:
         # extract out coordinates to interpolate all variables on to 
@@ -843,7 +850,7 @@ def ensgen(ensmems, year, Rdatpath, CO2file):
     return GAI_all_merged, GAI_ensmean, GAI_ensstd, tmean_all_merged, prec_all_merged, solarrad_all_merged, Jarray_all_merged, Cday_all_merged, GSS_all_merged, HarvestJday, AWC, temp_cconc, x, y, t
 
 
-def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, year, datasetname, precname, radname, crop, coords, dataloc, saveloc, AWCrast, elevfile, CO2file):
+def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, year, datasetname, precname, radname, caltype, crop, coords, dataloc, saveloc, AWCrast, elevfile, CO2file):
     '''
     Generates a set of ensemble members of GAI at specified coordinates,
     or the closest model grid point to them.
@@ -891,19 +898,23 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
     # gen xarrays to store data
     if moderrswitch==2:
         if assimvar == 'LAI':
-            prior_p_all, fPAR_p_all, tmean_p_all, prec_p_all, solarrad_p_all, \
-            Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, prior_p_ensstd = \
+            prior_p_all, fPAR_p_all, tmean_p_all, tmin_p_all, tmax_p_all, \
+            prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, \
+            GSS_p_all, AWC_allp1, prior_p_ensstd = \
             create_xrs(coords, ensmems, len(times), 1)
         elif assimvar == 'fPAR':
-            GAI_p_all, prior_p_all, tmean_p_all, prec_p_all, solarrad_p_all, \
-            Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, prior_p_ensstd = \
+            GAI_p_all, prior_p_all, tmean_p_all, tmin_p_all, tmax_p_all, \
+            prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, \
+            GSS_p_all, AWC_allp1, prior_p_ensstd = \
             create_xrs(coords, ensmems, len(times), 1)
     else:
         if assimvar == 'LAI':
-            prior_p_all, fPAR_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
+            prior_p_all, fPAR_p_all, tmean_p_all, tmin_p_all, tmax_p_all, \
+            prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
             create_xrs(coords, ensmems, len(times), 0)
         elif assimvar == 'fPAR':
-            GAI_p_all, prior_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
+            GAI_p_all, prior_p_all, tmean_p_all, tmin_p_all, tmax_p_all, \
+            prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1 = \
             create_xrs(coords, ensmems, len(times), 0)
 
     for ensmem in ensmems:
@@ -941,7 +952,9 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
             
             fPAR1        = np.array(datalist2.rx2('LI')) # convert to python numpy
             GAI1         = np.array(datalist2.rx2('GAI')) 
-            tmean1       = np.array(datalist2.rx2('tmean'))
+            tmean1       = np.array(datalist2.rx2('tmean')) 
+            tmin1        = np.array(datalist2.rx2('tmin')) 
+            tmax1        = np.array(datalist2.rx2('tmax')) 
             prec1        = np.array(datalist2.rx2('prec'))
             solarrad1    = np.array(datalist2.rx2('solarrad'))
             Jarray1      = np.array(datalist2.rx2('Jarray'))
@@ -955,8 +968,7 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
             x = np.array(datalist2.rx2('x'))
             y = np.array(datalist2.rx2('y'))
             t = np.array(datalist2.rx2('t'))
-            # TODO adapt to handle non-360 day calendars
-            attrs = {'units': 'days since ' + t[0], 'calendar': '360_day'}
+            attrs = {'units': 'days since ' + t[0], 'calendar': caltype}
 
             if assimvar == 'LAI':
                 prior_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = GAI1
@@ -965,6 +977,8 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
                 prior_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = fPAR1
                 GAI_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = GAI1
             tmean_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = tmean1
+            tmin_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = tmin1
+            tmax_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = tmax1
             prec_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = prec1
             solarrad_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = solarrad1
             Jarray_p_all[str(tob[0])+','+str(tob[1])].loc[dict(ensmem=int(ensmem))] = Jarray1
@@ -980,12 +994,14 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
         GAI_p_all.time.attrs  = attrs
     prior_p_all.time.attrs    = attrs
     tmean_p_all.time.attrs    = attrs
+    tmin_p_all.time.attrs     = attrs
+    tmax_p_all.time.attrs     = attrs
     prec_p_all.time.attrs     = attrs
     solarrad_p_all.time.attrs = attrs
     Jarray_p_all.time.attrs   = attrs
     Cday_p_all.time.attrs     = attrs
     GSS_p_all.time.attrs      = attrs
-    AWC_allp1.time.attrs      = attrs
+    #AWC_allp1.time.attrs      = attrs
     if moderrswitch==2:
         prior_p_ensstd.time.attrs = attrs
 
@@ -995,12 +1011,14 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
         GAI_p_all      = xr.decode_cf(GAI_p_all, decode_coords=False)
     prior_p_all    = xr.decode_cf(prior_p_all, decode_coords=False)
     tmean_p_all    = xr.decode_cf(tmean_p_all, decode_coords=False)
+    tmin_p_all     = xr.decode_cf(tmin_p_all, decode_coords=False)
+    tmax_p_all     = xr.decode_cf(tmax_p_all, decode_coords=False)
     prec_p_all     = xr.decode_cf(prec_p_all, decode_coords=False)
     solarrad_p_all = xr.decode_cf(solarrad_p_all, decode_coords=False)
     Jarray_p_all   = xr.decode_cf(Jarray_p_all, decode_coords=False)
     Cday_p_all     = xr.decode_cf(Cday_p_all, decode_coords=False)
     GSS_p_all      = xr.decode_cf(GSS_p_all, decode_coords=False)
-    AWC_allp1      = xr.decode_cf(AWC_allp1, decode_coords=False)
+    #AWC_allp1      = xr.decode_cf(AWC_allp1, decode_coords=False)
     if moderrswitch==2:
         prior_p_ensstd = xr.decode_cf(GAI_p_ensstd, decode_coords=False)
 
@@ -1021,6 +1039,8 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
         prior_p_ensstd = prior_p_all.std(axis=0)
         prior_p_ensstd.to_netcdf(os.path.join(saveloc, datasetname + '_' + str(year) + 'ensstd.nc'))
     del tmean1
+    del tmin1
+    del tmax1
     del prec1
     del solarrad1
     del tmax_p
@@ -1030,9 +1050,9 @@ def ensgen_point(ensmems, assimvar, times, moderrtype, moderr, moderrswitch, yea
     del solarrad_p
 
     if assimvar == 'LAI':
-        return prior_p_all, prior_p_ensmean, prior_p_ensstd, fPAR_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
+        return prior_p_all, prior_p_ensmean, prior_p_ensstd, fPAR_p_all, tmean_p_all, tmin_p_all, tmax_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
     elif assimvar == 'fPAR':
-        return prior_p_all, prior_p_ensmean, prior_p_ensstd, GAI_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
+        return prior_p_all, prior_p_ensmean, prior_p_ensstd, GAI_p_all, tmean_p_all, tmin_p_all, tmax_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, HarvestJday, AWC_allp1, CDD, TT, temp_cconc
 
 
 def create_xrs(obscoords, ensmems, timlen, stdswitch):
@@ -1060,6 +1080,8 @@ def create_xrs(obscoords, ensmems, timlen, stdswitch):
     GAI_dict = {}
     extra_dict = {}
     tmean_dict = {}
+    tmin_dict = {}
+    tmax_dict = {}
     prec_dict = {}
     solarrad_dict = {}
     Jarray_dict = {}
@@ -1072,6 +1094,8 @@ def create_xrs(obscoords, ensmems, timlen, stdswitch):
         GAI_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         extra_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         tmean_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        tmin_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
+        tmax_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         prec_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         solarrad_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
         Jarray_dict[str(tob[0])+','+str(tob[1])] = xr.DataArray(np.zeros((len(ensmems), timlen)), coords=[ensmemsint, times], dims=['ensmem', 'time'])
@@ -1083,6 +1107,8 @@ def create_xrs(obscoords, ensmems, timlen, stdswitch):
     GAI_p_all = xr.Dataset(GAI_dict)
     extra_p_all = xr.Dataset(extra_dict)
     tmean_p_all = xr.Dataset(tmean_dict)
+    tmin_p_all = xr.Dataset(tmean_dict)
+    tmax_p_all = xr.Dataset(tmean_dict)
     prec_p_all = xr.Dataset(prec_dict)
     solarrad_p_all = xr.Dataset(solarrad_dict)
     Jarray_p_all = xr.Dataset(Jarray_dict)
@@ -1093,9 +1119,9 @@ def create_xrs(obscoords, ensmems, timlen, stdswitch):
         GAI_p_ensstd = xr.Dataset(GAI_p_ensstd_dict)
 
     if stdswitch==1:
-        return GAI_p_all, extra_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, GAI_p_ensstd
+        return GAI_p_all, extra_p_all, tmean_p_all, tmin_p_all, tmax_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1, GAI_p_ensstd
     else:
-        return GAI_p_all, extra_p_all, tmean_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1
+        return GAI_p_all, extra_p_all, tmean_p_all, tmin_p_all, tmax_p_all, prec_p_all, solarrad_p_all, Jarray_p_all, Cday_p_all, GSS_p_all, AWC_allp1
 
 def load_drivingdata(loaddata, ensmem, ensmems, year, Rdatpath, CO2file):
     '''
@@ -1873,7 +1899,7 @@ def update_yield_points(GAIold, GAInew, obscoords, tmean, prec, solarrad, Jarray
         
     return oldyields, newyields
 
-def update_yield_points_point(priorold, priornew, obscoords, assimvar, nonprior, tmean, prec, solarrad, Jarray, Cday, GSS, HarvestJday, AWC, CDD, TT, temp_cconc, ensmem):
+def update_yield_points_point(priorold, priornew, obscoords, assimvar, nonprior, tmean, tmin, tmax, prec, solarrad, Jarray, Cday, GSS, HarvestJday, AWC, CDD, TT, temp_cconc, ensmem):
     '''
     Run a series of GAI timeseries through the crop model to calculate the corresponding yields
 
@@ -1905,6 +1931,8 @@ def update_yield_points_point(priorold, priornew, obscoords, assimvar, nonprior,
         priorold1 = priorold[str(tob[0])+','+str(tob[1])].values
         nonprior1 = nonprior[str(tob[0])+','+str(tob[1])].values
         tmean1 = tmean[str(tob[0])+','+str(tob[1])].values
+        tmin1 = tmean[str(tob[0])+','+str(tob[1])].values
+        tmax1 = tmean[str(tob[0])+','+str(tob[1])].values
         prec1 = prec[str(tob[0])+','+str(tob[1])].values
         solarrad1 = solarrad[str(tob[0])+','+str(tob[1])].values
         Jarray1 = Jarray[str(tob[0])+','+str(tob[1])].values
@@ -1914,6 +1942,8 @@ def update_yield_points_point(priorold, priornew, obscoords, assimvar, nonprior,
         
         #print(type(GAInew))
         #print(type(tmean))
+        #print(type(tmin))
+        #print(type(tmax))
         #print(type(prec))
         #print(type(solarrad))
         #print(type(AWC))
@@ -1925,11 +1955,11 @@ def update_yield_points_point(priorold, priornew, obscoords, assimvar, nonprior,
         #print(type(y))
         #print(type(temp_cconc))
         if assimvar == 'LAI':
-            yieldlist = wheat_yield_point(priornew1, nonprior1, assimvar, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
-            oldyieldlist = wheat_yield_point(priorold1, nonprior1, assimvar, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
+            yieldlist = wheat_yield_point(priornew1, nonprior1, assimvar, tmean1, tmin1, tmax1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
+            oldyieldlist = wheat_yield_point(priorold1, nonprior1, assimvar, tmean1, tmin1, tmax1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
         elif assimvar == 'fPAR':
-            yieldlist = wheat_yield_point(nonprior1, priornew1, assimvar, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
-            oldyieldlist = wheat_yield_point(nonprior1, priorold1, assimvar, tmean1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
+            yieldlist = wheat_yield_point(nonprior1, priornew1, assimvar, tmean1, tmin1, tmax1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
+            oldyieldlist = wheat_yield_point(nonprior1, priorold1, assimvar, tmean1, tmin1, tmax1, prec1, solarrad1, AWC1, Jarray1, Cday1, GSS1, HarvestJday, CDD, TT, cconc=temp_cconc)
 
         yieldval = np.asarray(yieldlist.rx2('finalyield')).copy()[0]
         oldyieldval = np.asarray(oldyieldlist.rx2('finalyield')).copy()[0]

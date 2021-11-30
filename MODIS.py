@@ -264,7 +264,7 @@ def get_S2tilebounds(S2dir):
     return tilebounds
 
 
-def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-31", cloudthresh=40, fieldno=None):
+def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-31", cloudthresh=40, fieldno=None, calendar='gregorian'):
 
     print('Getting S2 tile bounds')
     tilebounds = get_S2tilebounds(S2dir)
@@ -291,12 +291,15 @@ def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-3
         UTM30U = pyproj.CRS("+proj=utm +zone=30U, +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
         OSGB = pyproj.CRS(init='epsg:27700')
         OSGBtoUTM30U = pyproj.Transformer.from_crs(OSGB, UTM30U)
+        print('Set up coord transform')
         # this try/except block is to get around a weird pyproj error/bug where it fails
         # for the first transformation but not subsequent ones in a code block
         try:
             obscoordsUTM30 = [OSGBtoUTM30U.transform(x,y, errcheck=True) for x,y in obscoordsxy]
+            print('Trying coordinate transform')
         except pyproj.exceptions.ProjError:
-            obscoordsUTM30 = [OSGBtoUTM30U.transform(x,y, errcheck=True) for x,y in obscoordsxy] 
+            obscoordsUTM30 = [OSGBtoUTM30U.transform(x,y, errcheck=True) for x,y in obscoordsxy]
+            print('Trying coordinate transform again')
         print(obscoordsUTM30)
 
         # repeat the top row at the bottom to get around the same pyproj error
@@ -317,14 +320,19 @@ def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-3
         # index (rows)
         # generate list of dates
         tempindex = list(pd.date_range(startdate, enddate))
-        # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
-        tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
-        tempindex3 = list(pd.DatetimeIndex(tempindex2))
-        # remove duplicate 30ths
-        tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
-        # convert to 360day-calendar datetime index
-        cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
-        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+        if calendar=='360day':
+            # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
+            tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
+            tempindex3 = list(pd.DatetimeIndex(tempindex2))
+            # remove duplicate 30ths
+            tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
+            # convert to 360day-calendar datetime index
+            cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
+            cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+        else:
+            tempindex3 = list(pd.DatetimeIndex(tempindex))
+            cfdatetimes = [cft.DatetimeGregorian(d.year, d.month, d.day) for d in tempindex3]
+            cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
         # column names (the OSGB coords, minus all the digits after the decimal points)
         colnames = [str(x).split('.')[0] + ',' + str(y).split('.')[0] for x,y in obscoordsxy]
         # dataframe
@@ -370,15 +378,16 @@ def process_S2(S2dir, yieldfile=None, startdate="2015-01-01", enddate="2019-12-3
                 year = obsdate[:4]
                 month = obsdate[4:6]
                 day = obsdate[6:8]
-                if int(day) > 30:
-                    obsdate = year+month+'30'
+                if calendar=='360day':
+                    if int(day) > 30:
+                        obsdate = year+month+'30'
                 
                 LAIall.loc[obsdate,colnames[fID]] = fieldavgLAI
                 LAIall.to_csv('field_' + str(fieldno) + '.csv')
     return LAIall
 
 
-def S2_readin(filein):
+def S2_readin(filein, caltype):
     '''
     Read in csv file of all fields to run for into pandas table 
     like the one produced in the above function
@@ -388,24 +397,37 @@ def S2_readin(filein):
     coordstemp = list(allfields.columns.values)
     coords = [[c.split(',')[0], c.split(',')[1]] for c in coordstemp]
 
-    # create index with all the days of the 360day calendar (including Feb 29th, 30th)
+    # create index with all the days of the calendar used (including Feb 29th, 30th if 360day)
     d = allfields.index[0]
-    startdate = cft.Datetime360Day(d.year, d.month, d.day)
     e = allfields.index[-1]
-    enddate = cft.Datetime360Day(e.year, e.month, e.day)
-    alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
+    if caltype == '360day':
+        startdate = cft.Datetime360Day(d.year, d.month, d.day)
+        enddate = cft.Datetime360Day(e.year, e.month, e.day)
+        alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
+    elif caltype == 'gregorian':
+        startdate = cft.DatetimeGregorian(d.year, d.month, d.day)
+        enddate = cft.DatetimeGregorian(e.year, e.month, e.day)
+        alldaysidx = xr.cftime_range(startdate, enddate, calendar='gregorian', freq='D', name='date')
 
-    # convert index to 360day calendar datetimes
-    tempindex = list(pd.date_range(allfields.index[0], allfields.index[-1]))
-    # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
-    tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
-    tempindex3 = list(pd.DatetimeIndex(tempindex2))
-    # remove duplicate 30ths
-    tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
-    # convert to 360day-calendar datetime index
-    cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
-    cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
-    allfields.index = cfdatetimesidx
+    if caltype == '360day':
+        # convert original index of data to 360day calendar datetimes
+        tempindex = list(pd.date_range(allfields.index[0], allfields.index[-1]))
+        # change any 31sts to 30ths, to match 360day calendar of UKCP18 data
+        tempindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in tempindex]
+        tempindex3 = list(pd.DatetimeIndex(tempindex2))
+        # remove duplicate 30ths
+        tempindex4 = pd.DatetimeIndex(list(np.unique(np.asarray(tempindex3))))
+        # convert to 360day-calendar datetime index
+        cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in tempindex4]
+        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+        allfields.index = cfdatetimesidx
+    elif caltype == 'gregorian':
+        # convert original index of data to CFtime gregorian calendar datetimes
+        tempindex = list(pd.date_range(allfields.index[0], allfields.index[-1]))
+        tempindex3 = list(pd.DatetimeIndex(tempindex))
+        cfdatetimes = [cft.DatetimeGregorian(d.year, d.month, d.day) for d in tempindex3]
+        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+        allfields.index = cfdatetimesidx
 
     allfields = allfields.reindex(alldaysidx)    
                                             
