@@ -208,7 +208,7 @@ def MODIS_process(datasavedir, caltype, filter_threshold=0.5):
 
         # if calendar is 360day, then we need to do some nasty date wrangling to get the 
         # MODIS data on this calendar
-        if caltype == '360day':
+        if caltype == '360_day':
             # Change any '31st's of the month days to 30ths for 360day calendar
             startdate = str(pixel.index[0])[:10]
             enddate   = str(pixel.index[-1])[:10]
