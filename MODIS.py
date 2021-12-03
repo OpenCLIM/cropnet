@@ -150,13 +150,15 @@ def MODIS_download(datasavedir, datacodes, product_name='Lai_500m'):
         urllib.request.urlretrieve(url, savefile)
         time.sleep(1)
 
-def MODIS_process(datasavedir, filter_threshold=0.5):
+def MODIS_process(datasavedir, caltype, filter_threshold=0.5):
     '''
     Process the MODIS data from the downloaded CSV files into
     a pandas dataframe usable by the code.
     The data are translated onto a 360day calendar by shifting
     anything on the 31st of a month onto the 30th so that no 
-    data is lost. Values below a default threshold of 0.5 are
+    data is lost, if the driving data is 360day. Otherwise they
+    are kept on a gregorian calendar. 
+    Values below a default threshold of 0.5 are
     removed between 1st March and 1st July as unrealistic. 
 
     Inputs:
@@ -199,25 +201,38 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
         obscoords.append(coord)
         #print(coord)
 
-        # Read in data file and do a whole load of nasty date wrangling
+        # Read in data file 
         pixel = pd.read_csv(filein, header=None, index_col=0, usecols=[2,6], names=['date', colname], na_values='F')
         # Convert date index column to datetimes
         pixel.index = pd.to_datetime(pixel.index, format='%Y%j', exact=False)
-        # Change any '31st's of the month days to 30ths for 360day calendar
-        startdate = str(pixel.index[0])[:10]
-        enddate   = str(pixel.index[-1])[:10]
-        oldindex = pixel.index.values
-        newindex1 = [dt.datetime(int(str(d)[:4]), int(str(d)[5:7]), int(str(d)[8:10])) for d in list(oldindex)]
-        newindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in newindex1]
-        pixel.index = pd.DatetimeIndex(newindex2)
-        # Convert index to 360day calendar
-        datetimes = [dt.datetime.strptime(str(d), '%Y-%m-%dT%H:%M:%S.000000000') for d in pixel.index.values]
-        cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in datetimes]
-        cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
-        pixel.index = cfdatetimesidx
-        # Add in all the days on which there are no obs as NaNs
-        alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
-        pixel = pixel.reindex(alldaysidx)
+
+        # if calendar is 360day, then we need to do some nasty date wrangling to get the 
+        # MODIS data on this calendar
+        if caltype == '360day':
+            # Change any '31st's of the month days to 30ths for 360day calendar
+            startdate = str(pixel.index[0])[:10]
+            enddate   = str(pixel.index[-1])[:10]
+            oldindex = pixel.index.values
+            newindex1 = [dt.datetime(int(str(d)[:4]), int(str(d)[5:7]), int(str(d)[8:10])) for d in list(oldindex)]
+            newindex2 = [d if d.day<=30 else dt.datetime(d.year, d.month, 30) for d in newindex1]
+            pixel.index = pd.DatetimeIndex(newindex2)
+            # Convert index to 360day calendar
+            datetimes = [dt.datetime.strptime(str(d), '%Y-%m-%dT%H:%M:%S.000000000') for d in pixel.index.values]
+            cfdatetimes = [cft.Datetime360Day(d.year, d.month, d.day) for d in datetimes]
+            cfdatetimesidx = xr.coding.cftimeindex.CFTimeIndex(cfdatetimes)
+            pixel.index = cfdatetimesidx
+            # Add in all the days on which there are no obs as NaNs
+            alldaysidx = xr.cftime_range(startdate, enddate, calendar='360_day', freq='D', name='date')
+            pixel = pixel.reindex(alldaysidx)
+        else:
+            startdate = str(pixel.index[0])[:10]
+            enddate   = str(pixel.index[-1])[:10]
+            #oldindex = pixel.index.values
+            #newindex1 = [dt.datetime(int(str(d)[:4]), int(str(d)[5:7]), int(str(d)[8:10])) for d in list(oldindex)]
+            #pixel.index = pd.DatetimeIndex(newindex1)
+            alldaysidx = xr.cftime_range(startdate, enddate, calendar='standard', freq='D', name='date')
+            pixel = pixel.reindex(alldaysidx)
+
         # merge each pixel into one pandas table
         if filein == datafiles[0]:
             obspdall = pixel
@@ -235,7 +250,7 @@ def MODIS_process(datasavedir, filter_threshold=0.5):
         endyear = obspdall.index.values[-1].year
 
     for year in range(startyear, endyear+1):
-        seldates = xr.cftime_range(str(year)+'-03-01', str(year)+'-07-30', calendar='360_day', freq='D', name='date').values
+        seldates = xr.cftime_range(str(year)+'-03-01', str(year)+'-07-30', calendar=caltype, freq='D', name='date').values
         obspdall.loc[seldates] = obspdall.loc[seldates].where(obspdall.loc[seldates]>thresh)
 
     return obspdall, obscoords
