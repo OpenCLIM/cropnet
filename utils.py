@@ -189,7 +189,7 @@ def load_driving_data(basedatasetname, times,
         alldata['AWC'] = AWC.values#.transpose(1,0,2)
         #print(alldata['AWC'].shape)
         
-    if CO2file:
+    if CO2file!='None':
         pCO2 = pd.read_csv(CO2file)
         pCO2.set_index('YEAR', inplace=True)
         cconc = pCO2.loc[int(times[0][:4])].values[0]
@@ -557,7 +557,7 @@ def getnames(basedatasetname, precipname, radname, crop):
             ynames = ['y']
             tnames = ['time']
         elif crop == 'wheat':
-            fnames = ["pr", "tasmax", "tasmin", "rss_bias_corrected", "tas"]
+            fnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
             vnames = ['pr', 'tasmax', 'tasmin', 'rss', 'tas']
             dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
             xnames = ['x']

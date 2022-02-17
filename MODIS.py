@@ -199,7 +199,7 @@ def MODIS_process(datasavedir, caltype, filter_threshold=0.5):
         colname = str(x).split('.')[0] + ',' + str(y).split('.')[0]
         coord = [int(str(x).split('.')[0]), int(str(y).split('.')[0])]
         obscoords.append(coord)
-        #print(coord)
+        print(coord)
 
         # Read in data file 
         pixel = pd.read_csv(filein, header=None, index_col=0, usecols=[2,6], names=['date', colname], na_values='F')

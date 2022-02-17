@@ -684,6 +684,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
 
         ## CO2 fertilisation effect
    	if(FCO2 == TRUE){
+		print('Doing CO2 fertilisation')
 		RUE <-  ifelse(cconc < 350, RUE, ifelse(cconc > 750, RUE + RUE * (750/350 - 1) * 0.333, RUE + RUE * (cconc/350 - 1) * 0.333)) 
               }
         
