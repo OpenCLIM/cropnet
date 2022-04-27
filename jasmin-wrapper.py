@@ -24,7 +24,7 @@ import glob
 import shutil
 numpy2ri.activate()
 
-
+# Read in which year to run for from command-line/sbatch script
 startyear=int(sys.argv[1])
 startmonth=10
 startday=1
@@ -41,6 +41,9 @@ CO2file = 'None'
 simx = '01'
 crop='wheat'
 basedatasetname = 'ukcp18bc'
+
+if not os.path.exists(outloc):
+    os.makedirs(outloc)
 
 if startyear == endyear:
     years = [startyear]
@@ -161,10 +164,10 @@ WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
 WLyieldxr.name = 'water_limited_potential_wheat_yield'
 WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
 WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
-WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + startmonth + startday + '_' + str(endyear) + '.nc'
-WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + startmonth + startday + '_' + str(endyear) + '.nc'
-WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + startmonth + startday + '_' + str(endyear) + '.nc'
-WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + startmonth + startday + '_' + str(endyear) + '.nc'
+WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + str(startday) + '_' + str(startmonth) + '_' + str(endyear) + '.nc'
+WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + str(startday) + '_' + str(startmonth) + '_' + str(endyear) + '.nc'
+WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + str(startday) + '_' + str(startmonth) + '_' + str(endyear) + '.nc'
+WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + str(startday) + '_' + str(startmonth) + '_' + str(endyear) + '.nc'
 WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
 WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
 WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
