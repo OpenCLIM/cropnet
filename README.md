@@ -97,7 +97,8 @@ and 'MaxWet1.tfw' files. The data was derived from the UKCEH Grid-to-Grid model,
 soil moisture content at each (1km) grid point over the UK from a multi-year simulation. 
 For China, data can be obtained using the 'get_AWC_China.sh' bash script. 
 
-Annual CO2 concentration is an optional requirement. This is provided in the 'UKCP18_CO2_RCP85.csv' file.
+Annual CO2 concentration is an optional requirement. This is provided in the 'UKCP18_CO2_RCP??.csv' files 
+and is available from the RCP database at https://tntcat.iiasa.ac.at/RcpDb/dsd?Action=htmlpage&page=download 
 
 If you wish to verify the yield produced by the assimilation, you will need to set the verify switch to 1 and 
 supply yield data in the form of a shapefile containing the polygons of each field with coordinates in OSGB eastings 
