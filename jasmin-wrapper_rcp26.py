@@ -49,11 +49,11 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
                   Pre-configured options are 'ukcp18', 'ukcp18bc', 'era5', 'chess_and_haduk'.
 '''
 
-dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/**/*.nc"
-saveloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/driving_datafiles/ukcp18bc_rcp85'
-outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp85"
+dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape_RCP26/**/*.nc"
+saveloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/driving_datafiles/ukcp18bc_rcp26'
+outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp26"
 AWCrast = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/MaxWet1.tif"
-CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/UKCP18_CO2_RCP85.csv"
+CO2file = '/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/UKCP18_CO2_RCP26.csv'
 simx = '01'
 crop='wheat'
 basedatasetname = 'ukcp18bc'
@@ -70,11 +70,9 @@ else:
 if caltype == '360_day':
     startdate = cft.datetime(startyear,startmonth,startday,calendar='360_day')
     enddate = startdate + dt.timedelta(359)
-    fnenddate = startdate + dt.timedelta(360)
 elif caltype == 'gregorian':
     startdate = dt.datetime(startyear,startmonth,startday)
     enddate = startdate + relativedelta(years=1) - relativedelta(days=1)
-    fnenddate = startdate + relativedelta(years=1)
 
 endyear=enddate.year
 endmonth=enddate.month
@@ -193,11 +191,11 @@ WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
 WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
 WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
 WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
-WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
+WUyieldxr.name = 'water_unlimied_potential_wheat_yield'
 WLyieldxr.name = 'water_limited_potential_wheat_yield'
 WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
 WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
-enddatestr = fnenddate.strftime('%b%d')
+enddatestr = enddate.strftime('%b%d')
 WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
 WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
 WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
