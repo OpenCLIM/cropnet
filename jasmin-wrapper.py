@@ -49,6 +49,9 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
                   Pre-configured options are 'ukcp18', 'ukcp18bc', 'era5', 'chess_and_haduk'.
 '''
 
+## For Docker, pass these as environment variables in the run command for the image
+## and set them to folders local to the container, also mapping them to folders 
+## elsewhere (outside the container) in the run command
 dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/**/*.nc"
 saveloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/driving_datafiles/ukcp18bc_rcp85'
 outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp85"
