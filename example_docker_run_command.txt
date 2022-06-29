@@ -1,0 +1,2 @@
+docker run -e DATALOC=/drivingdata/chess-scape_rcp85/**/*.nc -e SAVELOC=/driving_datafiles/ukcp18bc_rcp85 -e OUTLOC=/outputs/no_assim/ukcp18bc_rcp85 -e AWCRAST=/drivingdata/ancils/MaxWet1.tif -e CO2FILE=/ancils/UKCP18_CO2_RCP85.csv -e SIMX=01 -e CROP=wheat -e BASEDATASETNAME=ukcp18bc -e STARTYEAR=1981 -e STARTMONTH=10 --mount type=bind,src=/c/docker_temp/drivingdata,dst=/drivingdata/ --mount type=bind,src=/c/docker_temp/driving_datafiles,dst=/driving_datafiles/ --mount type=bind,src=/c/docker_temp/outputs,dst=/outputs/ -t full_model_test
+
