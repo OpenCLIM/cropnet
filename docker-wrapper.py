@@ -1,3 +1,9 @@
+# Simple script to test the imports of all the packages we need
+# to run the cropnet model, and that env variables are passed correctly
+# MJB 21/06/22
+
+print('Importing packages')
+
 from utils import *
 from MODIS import *
 
@@ -10,24 +16,31 @@ import pyproj
 import shutil
 import requests
 import rasterio
+import urllib.request
+
 import numpy as np
 import xarray as xr
 import pandas as pd
 import cftime as cft
-import urllib.request
 import datetime as dt
 import netCDF4 as nc4
 import scipy.optimize as spo
 import matplotlib.pyplot as plt
+
+from dotenv import load_dotenv
 from dateutil.relativedelta import relativedelta
 
 from rpy2.robjects import numpy2ri
 numpy2ri.activate()
 
-'''
-Wrapper to run the CropNET crop models on the JASMIN LOTUS HPC cluster
+#import warnings
+#warnings.filterwarnings('ignore')
 
-Input options:
+'''
+Wrapper to run the CropNET crop models on DAFNI using Docker
+
+Input options are set either using a .env file in the same folder as 
+this script, or are set manually using the 'docker run' command
 dataloc - Location of all the meteorological driving data files. Use wildcards
           to ensure all files are selected. '**' means 'all folders'
 saveloc - Location to store the processed driving data files that are created
@@ -37,9 +50,9 @@ AWCrast - File path of the available water content file as a geotiff raster
 CO2file - File path of the CO2 concentrations file as a csv file with two columns,
           the year and the CO2 conc in ppm. Set to 'None' (including quotes) to 
           disable the CO2 fertlisation option.
-simx    - Only used if basedatasetname is 'ukcp18'. Ignored otherwise. Identifies the
-          ensemble member to use by selecting out the driving data files with the 
-          specified simx in their name
+simx    - Only used if basedatasetname is 'ukcp18'. Ignored otherwise, but still 
+          needs to be set (as e.g. 'None'). Identifies the ensemble member to use 
+          by selecting out the driving data files with the specified simx in their name
 crop    - Currently redundant as only wheat crop is supported
 basedatasetname - Which driving dataset to use. This is used to determine the file and
                   variable names to look for in the data read-in routine. These can be
@@ -50,19 +63,57 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
 ## For Docker, pass these as environment variables in the run command for the image
 ## and set them to folders local to the container, also mapping them to folders 
 ## elsewhere (outside the container) in the run command
-dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/**/*.nc"
-saveloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/driving_datafiles/ukcp18bc_rcp85'
-outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp85"
-AWCrast = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/MaxWet1.tif"
-CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/UKCP18_CO2_RCP85.csv"
-simx = '01'
-crop='wheat'
-basedatasetname = 'ukcp18bc'
+print('Getting environment variables from .env file if it exists')
+load_dotenv()
 
-startyear=int(sys.argv[1])
-startmonth=int(sys.argv[2])
-startday=1
+dataloc = str(os.getenv("DATALOC"))
+saveloc = str(os.getenv("SAVELOC"))
+outloc  = str(os.getenv("OUTLOC"))
+CO2file = str(os.getenv("CO2FILE"))
+simx = os.getenv("SIMX")
+crop = os.getenv("CROP")
+basedatasetname = os.getenv("BASEDATASETNAME")
+AWCrast = '/MaxWet1.tif'  #str(os.getenv("AWCRAST"))
 
+startyear  = int(os.getenv("STARTYEAR"))
+startmonth = int(os.getenv("STARTMONTH"))
+startday = 1
+
+print('Printing env variables')
+print(type(dataloc))
+print(dataloc)
+print(saveloc)
+print(outloc)
+print(AWCrast)
+print(CO2file)
+print(simx)
+print(crop)
+print(basedatasetname)
+print(type(startyear))
+print(startyear)
+print(type(startmonth))
+print(startmonth)
+print(type(startday))
+print(startday)
+
+print('testing access to files in ' + str(dataloc))
+print(glob.glob(dataloc))
+tds = xr.open_mfdataset(dataloc)
+print(tds)
+
+print('testing access to files in ' + str(saveloc))
+print(glob.glob(os.path.join(saveloc, '*')))
+
+print('testing access to files in ' + str(outloc))
+print(glob.glob(os.path.join(outloc, '*')))
+
+print('testing access to files in ' + os.path.dirname(AWCrast))
+print(glob.glob(os.path.dirname(AWCrast)))
+tf = xr.open_rasterio(AWCrast)
+print(tf)
+
+
+print('Running full model test run')
 if basedatasetname == 'chess_and_haduk':
     caltype = 'gregorian'
 else:
@@ -207,3 +258,6 @@ WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
 WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
 WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
 WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
+
+
+

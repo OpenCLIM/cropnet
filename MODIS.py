@@ -6,12 +6,12 @@ import requests
 import numpy as np
 import xarray as xr
 import pandas as pd
-from utils import *
 import cftime as cft
 import datetime as dt
 import urllib.request
 import geopandas as gpd
 
+from utils import *
 
 def MODIS_request(infile, obscoordsin, startyear, endyear, MODIScode='MCD15A2H'):
     '''

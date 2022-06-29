@@ -355,3 +355,4 @@ https://conda.anaconda.org/conda-forge/linux-64/jupyter_latex_envs-1.4.6-py38h32
 https://conda.anaconda.org/conda-forge/linux-64/jupyter_nbextensions_configurator-0.4.1-py38h578d9bd_2.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/jupyter-1.0.0-py38h578d9bd_6.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/jupyter_contrib_nbextensions-0.5.1-py38h32f6830_1.tar.bz2
+https://conda.anaconda.org/conda-forge/noarch/python-dotenv-0.20.0-pyhd8ed1ab_0.tar.bz2

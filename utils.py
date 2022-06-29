@@ -1,51 +1,50 @@
+import os
 import sys
-import rpy2.robjects as robjects
-from rpy2.robjects.packages import importr
-import rpy2.robjects.packages as rpackages
-from rpy2.robjects.vectors import StrVector
-from rpy2.robjects import numpy2ri
-#from download_era5 import *
-import rpy2
+import glob
+import shutil
+import pyproj
 import numpy as np
 import xarray as xr
+import pandas as pd
+import cartopy as cp
+import cftime as cft
+import netCDF4 as nc4
+import datetime as dt
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import scipy.optimize as spo
+
 from cdo import *
-import cartopy as cp
-import datetime as dt
-import pandas as pd
-import pyproj
-import geopandas as gpd
-from rasterio import features
 from affine import Affine
-#from dateutil.relativedelta import relativedelta
-import netCDF4 as nc4
-import cftime as cft
-import os
-import shutil
-import glob
 from IPython import display
-numpy2ri.activate()
-#import csv
-#import shapefile
-#from shapely.geometry import Polygon, MultiPolygon, Point, MultiPoint, shape
+from rasterio import features
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, ProgressBar, visualize
-#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-#import matplotlib.animation as animation
+
+
+import rpy2
+import rpy2.robjects as robjects
+import rpy2.robjects.packages as rpackages
+
+from rpy2.robjects import numpy2ri
+from rpy2.robjects.packages import importr
+from rpy2.robjects.vectors import StrVector
+numpy2ri.activate()
+
 
 # Set up R environment on import of this module
-raster = importr('raster')
 rgdal = importr('rgdal')
 rgeos = importr('rgeos')
 ncdf4 = importr('ncdf4')
 abind = importr('abind')
+raster = importr('raster')
 #Evapotranspiration = importr('Evapotranspiration')
 r = robjects.r
 try:
-    r['source']('Grass_potpredict_MJB.R') # define R functions
+    #r['source']('Grass_potpredict_MJB.R') # define R functions
     r['source']('Lynch_potpredict_v2_MJB.R')
 except rpy2.rinterface.embedded.RRuntimeError:
     print('Warning: R crop model files not available')
+
 
 def load_driving_data(basedatasetname, times,
                       dataloc, saveloc, simx, crop, AWCrast='None', CO2file='None',

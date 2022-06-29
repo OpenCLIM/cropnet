@@ -1,19 +1,15 @@
 FROM continuumio/miniconda3
 
-COPY *.R *.py *.txt ./
+COPY docker_conda_env_file_DAenv.txt ./
 
 RUN conda update --name base conda &&\
     conda create --name s2lai --file docker_conda_env_file_DAenv.txt
 
-# this changes the default shell that is used in any subsequent RUN
-# commands, and possibly also any commands we run ourselves in
-# a running image built from this container
-# Here any shell commands we run will have this prefixed to it
-SHELL ["conda", "run", "--name", "s2lai", "/bin/bash", "-c"]
+COPY Lynch_potpredict_v2_MJB.R docker-wrapper.py MODIS.py utils.py MaxWet1.* ./
 
 # CMD does not execute anything at build time, 
 # but specifies the intended command for the image.
-CMD conda run --name s2lai python docker_test.py
+CMD conda run --name s2lai python docker-wrapper.py
 
 
 ##################################
@@ -26,3 +22,10 @@ CMD conda run --name s2lai python docker_test.py
 #
 # CMD does not execute anything at build time, but specifies the intended command for the image.
 #CMD python test.py
+#
+# this changes the default shell that is used in any subsequent RUN
+# commands, and possibly also any commands we run ourselves in
+# a running image built from this container
+# Here any shell commands we run will have this prefixed to it
+# Doesn't seem to be needed
+#SHELL ["conda", "run", "--name", "s2lai", "/bin/bash", "-c"]
