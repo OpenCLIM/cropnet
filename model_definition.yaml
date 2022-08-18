@@ -1,0 +1,78 @@
+kind: Model
+api_version: v1beta1
+metadata:
+  display_name: CropNET Wheat model
+  name: cropnet-wheat
+  publisher: UKCEH
+  summary: >
+    A crop model predicting potential wheat yield from climate data 
+  description: >
+    Created by John Redhead and Matt Brown at UKCEH as part of the CropNET and OpenCLIM projects. 
+    Potential yield is the maximum possible yield acheivable given the climate conditions and in 
+    the absence of any other limiting factors such as pests. Water limitation, heat stress and 
+    CO2 fertilisation (optional) are included. The resolution of the model is the resolution of
+    the driving data provided. Water stress and saturation are determined using an 'available 
+    water capacity' derived from the SHETRAN hydrological model. Mode will run for one calendar
+    year from starting data specified. See Lynch et al. 2017 for more details on the model. 
+    details (https://www.jstor.org/stable/26609794)
+  source_code: https://github.com/OpenCLIM/cropnet
+
+spec:
+  inputs:
+    parameters:
+      - name: RCP
+        title: RCP Scenario
+        description: Which Scenario to use for CO2 fertilisation. Available options are '2.6' or '8.5'
+        type: string
+        default: 8.5
+        required: True
+        options:
+          - name: 8.5
+            title: 8.5
+          - name: 2.6
+            title: 2.6
+      - name: startyear
+        title: start year
+        description: Year to start in
+        type: int
+        required: True
+      - name: startmonth
+        title: start month
+        description: Month to start in (from 1 - 12 inclusive)
+        type: int
+        required: True
+      - name: startday
+        title: start day
+        description: Day of the month to start in
+        type: int
+        required: True
+
+    dataslots:
+      - name: Climate driving data
+        description: >
+          The climate data used to drive the crop model. Must contain daily precip, net solar, 
+          mean, max and min air temperature. 
+        default:
+          - # To be filled 23c61169-8345-42bd-b0ce-375527495cac
+        path: inputs/drivingdata/
+        required: true
+
+  outputs:
+    datasets:
+      - name: yields
+        type: NetCDF
+        description: >
+          Four netcdf files, one for each of the
+          - Water-limited, heat-stressed potential yield
+            UK_WLHL_ukcp18bc_MMMDD_YYYY.nc
+          - Water-limited, not heat-stressed potential yield
+            UK_WL_ukcp18bc_MMMDD_YYYY.nc
+          - Water-unlimited, not heat-stressed potential yield
+            UK_WU_ukcp18bc_MMMDD_YYYY.nc
+          - Water-unlimited, heat-stressed potential yield
+            UK_WUHL_ukcp18bc_MMMDD_YYYY.nc
+          Over the same grid as the input climate driving data but
+          with non-crop growing regions masked out. 
+          Filenames are in the format specified above. MMM, DD, YYYY
+          specify the end date of the run, exactly one year after the
+          provided start date. 
