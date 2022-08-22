@@ -5,23 +5,12 @@ from MODIS import *
 
 import os
 import sys
-import time
-import glob
-import mgrs
 import pyproj
-import shutil
-import requests
-import rasterio
-import urllib.request
 
 import numpy as np
 import xarray as xr
-import pandas as pd
 import cftime as cft
 import datetime as dt
-import netCDF4 as nc4
-import scipy.optimize as spo
-import matplotlib.pyplot as plt
 
 from dotenv import load_dotenv
 from dateutil.relativedelta import relativedelta

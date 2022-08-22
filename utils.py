@@ -1,16 +1,12 @@
 import os
 import sys
 import glob
-import shutil
 import pyproj
 import numpy as np
 import xarray as xr
 import pandas as pd
-import cartopy as cp
-import cftime as cft
-import netCDF4 as nc4
-import datetime as dt
 import geopandas as gpd
+import subprocess as subp
 import matplotlib.pyplot as plt
 import scipy.optimize as spo
 
@@ -18,7 +14,7 @@ from cdo import *
 from affine import Affine
 from IPython import display
 from rasterio import features
-from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, ProgressBar, visualize
+from dask.diagnostics import  ProgressBar
 
 
 import rpy2
@@ -249,11 +245,7 @@ def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
     '''
         
     fnames,vnames,dnames,xnames,ynames,tnames,interpvar = getnames(basedatasetname, precipname, radname, crop)
-    
-    if downloaddata == 1:
-        download_data(os.path.dirname(dataloc), np.arange(startyear,endyear+1), fnames,
-                      lonmin, lonmax, latmin, latmax)
-        
+           
     print('Producing subsetted driving data nc file(s):')
     datafile = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
                                     dataloc, saveloc, simx, times, precipname, radname,
@@ -404,17 +396,7 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
 
     snlist = snlist2
     #print(snlist)
-    
-    if precipname=='None':
-        pname=''
-    else:
-        pname='_'+precipname
-    if radname=='None':
-        rname=''
-    else:
-        rname='_'+radname
-    dname = '_'+basedatasetname
-    
+        
     # extract out coordinates to interpolate all variables on to 
     intind = dnames.index(interpvar)
     vlist = [name for name in snlist if filenames[intind] in os.path.basename(name)]
@@ -427,7 +409,6 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
     
     # for each variable in varnames...
     data = []
-    alldata = {}
     for v in range(0, len(filenames)):
         print('Processing ' + filenames[v])
         # pull out only the files corresponding to this particular variable
@@ -2575,7 +2556,7 @@ def country_subset_shapefile(data=None, datafile=None, multifile=0, sfname=None,
         if multifile == 1:
             data = xr.open_mfdataset(datafile, parallel=True)
         else:
-            data = xr.load_dataset(filein)
+            data = xr.load_dataset(datafile)
 
     subset = add_shape_coord_from_data_array(data, sfname, IDname, IDs, yname, xname)
     if drop==True:
