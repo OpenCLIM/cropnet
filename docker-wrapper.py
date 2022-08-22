@@ -1,7 +1,3 @@
-# Simple script to test the imports of all the packages we need
-# to run the cropnet model, and that env variables are passed correctly
-# MJB 21/06/22
-
 print('Importing packages')
 
 from utils import *
@@ -63,57 +59,62 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
 ## For Docker, pass these as environment variables in the run command for the image
 ## and set them to folders local to the container, also mapping them to folders 
 ## elsewhere (outside the container) in the run command
-print('Getting environment variables from .env file if it exists')
+#print('Getting environment variables from .env file if it exists')
 load_dotenv()
 
-dataloc = str(os.getenv("DATALOC"))
-saveloc = str(os.getenv("SAVELOC"))
-outloc  = str(os.getenv("OUTLOC"))
-CO2file = str(os.getenv("CO2FILE"))
-simx = os.getenv("SIMX")
-crop = os.getenv("CROP")
-basedatasetname = os.getenv("BASEDATASETNAME")
-AWCrast = '/MaxWet1.tif'  #str(os.getenv("AWCRAST"))
+dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/" #'/data/inputs/drivingdata/' 
+saveloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/extracted_data/" #'/extracted_data/'
+outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/test" #'/data/outputs/' 
 
-startyear  = int(os.getenv("STARTYEAR"))
-startmonth = int(os.getenv("STARTMONTH"))
-startday = 1
+basedatasetname = 'ukcp18bc' # os.getenv("BASEDATASETNAME") hardcoded for now
+simx = '01'                  # os.getenv("SIMX") hardcoded for now
+crop = 'wheat'               # os.getenv("CROP") hardcoded for now
+
+startyear  = 2020 #int(os.getenv("startyear"))
+startmonth = 10 #int(os.getenv("startmonth"))
+startday = 1 #int(os.getenv("startday"))
+
+RCP = str(os.getenv("RCP"))
+if RCP == '8.5':
+    CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/UKCP18_CO2_RCP85.csv" #'/UKCP18_CO2_RCP85.csv'
+elif RCP == '2.6':
+    CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/UKCP18_CO2_RCP26.csv" #'/UKCP18_CO2_RCP26.csv'
+else:
+    CO2file = None
+
+AWCrast = '/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/MaxWet1.tif' 
 
 print('Printing env variables')
-print(type(dataloc))
-print(dataloc)
-print(saveloc)
-print(outloc)
-print(AWCrast)
-print(CO2file)
-print(simx)
-print(crop)
-print(basedatasetname)
-print(type(startyear))
-print(startyear)
-print(type(startmonth))
-print(startmonth)
-print(type(startday))
-print(startday)
+print('dataloc: ' + str(dataloc))
+print('outloc: ' + str(outloc))
+print('AWCrast: ' + str(AWCrast))
+print('RCP: ' + str(RCP))
+print('CO2file: ' + str(CO2file))
+print('simx: ' + str(simx))
+print('crop: ' + str(crop))
+print('basedatasetname: ' + str(basedatasetname))
+print('startyear: ' + str(startyear))
+print('startmonth: ' + str(startmonth))
+print('startday: ' + str(startday))
 
-print('testing access to files in ' + str(dataloc))
-print(glob.glob(dataloc))
-tds = xr.open_mfdataset(dataloc)
-print(tds)
+#print('testing access to files in ' + str(dataloc))
+#print(glob.glob(dataloc))
+#tds = xr.open_mfdataset(dataloc)
+#print(tds)#
+#
+#print('testing access to files in ' + str(saveloc))
+#print(glob.glob(os.path.join(saveloc, '*')))
+#
+#print('testing access to files in ' + str(outloc))
+#print(glob.glob(os.path.join(outloc, '*')))
+#
+#print('testing access to files in ' + os.path.dirname(AWCrast))
+#print(glob.glob(os.path.dirname(AWCrast)))
+#tf = xr.open_rasterio(AWCrast)
+#print(tf)
+#
 
-print('testing access to files in ' + str(saveloc))
-print(glob.glob(os.path.join(saveloc, '*')))
-
-print('testing access to files in ' + str(outloc))
-print(glob.glob(os.path.join(outloc, '*')))
-
-print('testing access to files in ' + os.path.dirname(AWCrast))
-print(glob.glob(os.path.dirname(AWCrast)))
-tf = xr.open_rasterio(AWCrast)
-print(tf)
-
-
-print('Running full model test run')
+print('Running full model')
 if basedatasetname == 'chess_and_haduk':
     caltype = 'gregorian'
 else:
@@ -134,6 +135,7 @@ endday=enddate.day
 
 if not os.path.exists(outloc):
     os.makedirs(outloc)
+
 if not os.path.exists(saveloc):
     os.makedirs(saveloc)
 
@@ -187,7 +189,7 @@ for year in years:
 
 r['source']('Lynch_potpredict_v2_MJB.R')
 dd = load_driving_data(basedatasetname, times,
-                       dataloc, saveloc, simx, crop, AWCrast, CO2file)
+                       saveloc, dataloc, simx, crop, AWCrast, CO2file)
 
 tmean = dd['tmean']
 tmax  = dd['tmax']

@@ -51,7 +51,7 @@ spec:
       - name: Climate driving data
         description: >
           The climate data used to drive the crop model. Must contain daily precip, net solar, 
-          mean, max and min air temperature. 
+          mean, max and min air temperature. Must have timespan in filenames as yyyymmdd-yyyymmdd
         default:
           - # To be filled 23c61169-8345-42bd-b0ce-375527495cac
         path: inputs/drivingdata/

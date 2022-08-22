@@ -5,7 +5,7 @@ COPY docker_conda_env_file_DAenv.txt ./
 RUN conda update --name base conda &&\
     conda create --name s2lai --file docker_conda_env_file_DAenv.txt
 
-COPY Lynch_potpredict_v2_MJB.R docker-wrapper.py MODIS.py utils.py MaxWet1.* ./
+COPY Lynch_potpredict_v2_MJB.R docker-wrapper.py MODIS.py utils.py MaxWet1.* UKCP18*.csv ./
 
 # CMD does not execute anything at build time, 
 # but specifies the intended command for the image.
