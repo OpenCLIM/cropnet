@@ -45,33 +45,30 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
                   Pre-configured options are 'ukcp18', 'ukcp18bc', 'era5', 'chess_and_haduk'.
 '''
 
-## For Docker, pass these as environment variables in the run command for the image
-## and set them to folders local to the container, also mapping them to folders 
-## elsewhere (outside the container) in the run command
-#print('Getting environment variables from .env file if it exists')
-load_dotenv()
 
-dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/" #'/data/inputs/drivingdata/' 
-saveloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape/extracted_data/" #'/extracted_data/'
-outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/test" #'/data/outputs/' 
+#load_dotenv()
+
+dataloc = '/data/inputs/drivingdata/' 
+saveloc = '/extracted_data/'
+outloc  = '/data/outputs/' 
 
 basedatasetname = 'ukcp18bc' # os.getenv("BASEDATASETNAME") hardcoded for now
 simx = '01'                  # os.getenv("SIMX") hardcoded for now
 crop = 'wheat'               # os.getenv("CROP") hardcoded for now
 
-startyear  = 2020 #int(os.getenv("startyear"))
-startmonth = 10 #int(os.getenv("startmonth"))
-startday = 1 #int(os.getenv("startday"))
+startyear  = int(os.getenv("startyear"))
+startmonth = int(os.getenv("startmonth"))
+startday = int(os.getenv("startday"))
 
 RCP = str(os.getenv("RCP"))
 if RCP == '8.5':
-    CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/UKCP18_CO2_RCP85.csv" #'/UKCP18_CO2_RCP85.csv'
+    CO2file = '/UKCP18_CO2_RCP85.csv'
 elif RCP == '2.6':
-    CO2file = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/UKCP18_CO2_RCP26.csv" #'/UKCP18_CO2_RCP26.csv'
+    CO2file = '/UKCP18_CO2_RCP26.csv'
 else:
-    CO2file = None
+    CO2file = 'None'
 
-AWCrast = '/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni/MaxWet1.tif' 
+AWCrast = '/MaxWet1.tif' 
 
 print('Printing env variables')
 print('dataloc: ' + str(dataloc))
@@ -86,22 +83,6 @@ print('startyear: ' + str(startyear))
 print('startmonth: ' + str(startmonth))
 print('startday: ' + str(startday))
 
-#print('testing access to files in ' + str(dataloc))
-#print(glob.glob(dataloc))
-#tds = xr.open_mfdataset(dataloc)
-#print(tds)#
-#
-#print('testing access to files in ' + str(saveloc))
-#print(glob.glob(os.path.join(saveloc, '*')))
-#
-#print('testing access to files in ' + str(outloc))
-#print(glob.glob(os.path.join(outloc, '*')))
-#
-#print('testing access to files in ' + os.path.dirname(AWCrast))
-#print(glob.glob(os.path.dirname(AWCrast)))
-#tf = xr.open_rasterio(AWCrast)
-#print(tf)
-#
 
 print('Running full model')
 if basedatasetname == 'chess_and_haduk':
