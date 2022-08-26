@@ -68,7 +68,7 @@ elif RCP == '2.6':
 else:
     CO2file = 'None'
 
-AWCrast = '/MaxWet1.tif' 
+AWCrast = '/MaxWet1.tif'
 
 print('Printing env variables')
 print('dataloc: ' + str(dataloc))

@@ -362,17 +362,17 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
     '''
     
     # extract out the files of the start and end year
-    tarfile = glob.glob(os.path.join(dataloc, '*.tar.gz'))[0]
-    print('Found tarfile: ' + str(tarfile))
     startyear = times[0][:4]
     endyear = times[-1][:4]
     print('startyear: ' + str(startyear))
     print('endyear: ' + str(endyear))
-    print('Extracting data using commands: ')
-    print("tar -zxvf " + tarfile + " -C " + saveloc + " --wildcards '*" + str(startyear) + "????-" + str(startyear) + "????*.nc" + "'")
-    print("tar -zxvf " + tarfile + " -C " + saveloc + " --wildcards '*" + str(endyear) + "????-" + str(endyear) + "????*.nc" + "'")
-    subp.call(["tar -zxvf " + tarfile + " -C " + saveloc + " --wildcards '*" + str(startyear) + "????-" + str(startyear) + "????*.nc" + "'"], shell=True)
-    subp.call(["tar -zxvf " + tarfile + " -C " + saveloc + " --wildcards '*" + str(endyear) + "????-" + str(endyear) + "????*.nc" + "'"], shell=True)
+    tarfiles = glob.glob(os.path.join(dataloc, "*" + str(startyear) + "????-" + str(startyear) + "????*.tar.gz"))
+    tarfiles2 = glob.glob(os.path.join(dataloc, "*" + str(endyear) + "????-" + str(endyear) + "????*.tar.gz"))
+    tarfiles.extend(tarfiles2)
+
+    print('Extracting data: ')
+    for tarfile in tarfiles:
+        subp.call(["tar -zxvf " + tarfile + " -C " + saveloc], shell=True)
 
     # get list of extracted nc files
     print('Listing extracted nc files')
