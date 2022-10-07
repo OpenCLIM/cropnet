@@ -1,44 +1,38 @@
+import os
 import sys
-import rpy2.robjects as robjects
-from rpy2.robjects.packages import importr
-import rpy2.robjects.packages as rpackages
-from rpy2.robjects.vectors import StrVector
-from rpy2.robjects import numpy2ri
-#from download_era5 import *
-import rpy2
+import glob
+import pyproj
 import numpy as np
 import xarray as xr
+import pandas as pd
+import geopandas as gpd
+import subprocess as subp
 import matplotlib.pyplot as plt
 import scipy.optimize as spo
+
 from cdo import *
-import cartopy as cp
-import datetime as dt
-import pandas as pd
-import pyproj
-import geopandas as gpd
-from rasterio import features
 from affine import Affine
-#from dateutil.relativedelta import relativedelta
-import netCDF4 as nc4
-import cftime as cft
-import os
-import shutil
-import glob
 from IPython import display
+from rasterio import features
+from dask.diagnostics import  ProgressBar
+
+
+import rpy2
+import rpy2.robjects as robjects
+import rpy2.robjects.packages as rpackages
+
+from rpy2.robjects import numpy2ri
+from rpy2.robjects.packages import importr
+from rpy2.robjects.vectors import StrVector
 numpy2ri.activate()
-#import csv
-#import shapefile
-#from shapely.geometry import Polygon, MultiPolygon, Point, MultiPoint, shape
-from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler, ProgressBar, visualize
-#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-#import matplotlib.animation as animation
+
 
 # Set up R environment on import of this module
-raster = importr('raster')
 rgdal = importr('rgdal')
 rgeos = importr('rgeos')
 ncdf4 = importr('ncdf4')
 abind = importr('abind')
+raster = importr('raster')
 #Evapotranspiration = importr('Evapotranspiration')
 r = robjects.r
 try:
@@ -47,8 +41,9 @@ try:
 except rpy2.rinterface.embedded.RRuntimeError:
     print('Warning: R crop model files not available')
 
+
 def load_driving_data(basedatasetname, times,
-                      dataloc, saveloc, simx, crop, AWCrast='None', CO2file='None',
+                      saveloc, dataloc, simx, crop, AWCrast='None', CO2file='None',
                       lonmin=0, lonmax=0, latmin=0, latmax=0, downloaddata=0,
                       mask=0, sfname='ne_10m_admin_0_countries.shp', countries=['China'],
                       cropmask=0, cmfile=None, cropthresh=0, irrmask=0, irrfile=None,
@@ -62,7 +57,6 @@ def load_driving_data(basedatasetname, times,
     basedatasetname: Which driving dataset we're using
     times: 1D np array that defines the time period that the data will be cut down to
     dataloc: Directory containing all the data files
-    saveloc: Where to output the single netcdf file containing all the variables
     simx: Only used for ukcp18 data, to identify the ensemble member used
     crop: Which crop to load data for
     AWCrast: Location of the AWC dataset used for wheat crops. Defaults to 'None'.
@@ -97,29 +91,20 @@ def load_driving_data(basedatasetname, times,
                       lonmin, lonmax, latmin, latmax)
 
     print('Producing subsetted driving data nc file(s):')
-    datafile = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
-                                    dataloc, saveloc, simx, times, precipname, radname,
-                                    mask, sfname, countries, crop, cropmask, cmfile, cropthresh)
+    data = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
+                                saveloc, dataloc, simx, times, precipname, radname,
+                                mask, sfname, countries, crop, cropmask, cmfile, cropthresh)
 
-    # process the rest of the driving data
-    print('Reading in driving data from file')
-    data = xr.load_dataset(datafile)
+
     interpind = dnames.index(interpvar)
-    # mask data to country
-    #if mask==1:
-    #    print('Masking data to ' + str(countries))
-    #    data = country_subset_shapefile(data=data, sfname=sfname, IDname='ADMIN', IDs=countries,
-    #                                    xname=xnames[interpind], yname=ynames[interpind])
-    #data = data.drop_vars(['time_bnds'])
 
     x = data['x'].values
     y = data['y'].values
-    
 
     alldata = {}
     print('Processing data into format ready for model')
     for v in range(0,len(vnames)):
-        print('Reading in ' + dnames[v])
+        print('Reading in files')
         if type(vnames[v]) == list:
             if radname=='ceres-syn':
                 alldata[dnames[v]] = (data[vnames[v][0]] - data[vnames[v][1]]).values.squeeze().transpose(1,2,0)
@@ -210,7 +195,8 @@ def load_driving_data(basedatasetname, times,
         
     return alldata
 
-    
+
+# not used
 def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
                             simx, crop, elevfile='None', AWCrast='None', CO2file='None',
                             lonmin=0, lonmax=0, latmin=0, latmax=0, downloaddata=0,
@@ -259,11 +245,7 @@ def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
     '''
         
     fnames,vnames,dnames,xnames,ynames,tnames,interpvar = getnames(basedatasetname, precipname, radname, crop)
-    
-    if downloaddata == 1:
-        download_data(os.path.dirname(dataloc), np.arange(startyear,endyear+1), fnames,
-                      lonmin, lonmax, latmin, latmax)
-        
+           
     print('Producing subsetted driving data nc file(s):')
     datafile = process_driving_data(basedatasetname, fnames, vnames, dnames, xnames, ynames, tnames, interpvar,
                                     dataloc, saveloc, simx, times, precipname, radname,
@@ -355,7 +337,7 @@ def load_driving_data_point(basedatasetname, times, coords, dataloc, saveloc,
     return alldata_p
 
 
-def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, ynames, tnames, interpvar, dataloc, saveloc, simx,
+def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, ynames, tnames, interpvar, saveloc, dataloc, simx,
                          times, precipname, radname, mask, sfname, countries, crop, cropmask, cmfile, cropthresh):
     '''
     Read in data from various datasets and merge them into one netcdf file. 
@@ -371,7 +353,6 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
     ynames: The y dimnames of the variables, must correspond with the above
     tnames: The time dimnames of the variables, must correspond with the above
     dataloc: Directory containing all the data files
-    saveloc: Where to output the single netcdf file containing all the variables
     simx: Only used for ukcp18 data, to identify the ensemble member used
     times: 1D np array of yyyymmdd strings defining the time period that the data will be cut down to
     precipname: The name of the precip dataset to use
@@ -379,12 +360,10 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
     Outputs: 
     savefile: The location of the created netcdf file containing all the variables required to run the cropmodel
     '''
-    
-    if not os.path.exists(saveloc):
-        os.makedirs(saveloc)
 
-    # list all the data files
+    # get list of extracted nc files
     nlist = glob.glob(dataloc, recursive=True)
+    print(nlist)
 
     # pull out only files corresponding to this ensemble member
     if basedatasetname == 'ukcp18':
@@ -402,86 +381,66 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
 
     snlist = snlist2
     #print(snlist)
+        
+    # extract out coordinates to interpolate all variables on to 
+    intind = dnames.index(interpvar)
+    vlist = [name for name in snlist if filenames[intind] in os.path.basename(name)]
+    dataset = xr.open_mfdataset(vlist, parallel=True, combine='by_coords')
+    subsetds = dataset.sel(time=slice(times[0][:4] + '-' + times[0][4:6] + '-' + times[0][6:8], \
+                                      times[-1][:4] + '-' + times[-1][4:6] + '-' + times[-1][6:8]))
+    interpxs = subsetds[xnames[intind]]
+    interpys = subsetds[ynames[intind]]
+    interpts = subsetds[tnames[intind]]
     
-    if precipname=='None':
-        pname=''
-    else:
-        pname='_'+precipname
-    if radname=='None':
-        rname=''
-    else:
-        rname='_'+radname
-    dname = '_'+basedatasetname
-    savefile = os.path.join(saveloc, 'allvars' + simx + dname + pname + rname + '_' + times[0] + \
-                            '-' + times[-1] + '.nc')
-    if os.path.exists(savefile):
-        genswitch = 0
-        print('Driving data file ' + savefile + ' already exists, skipping generation')
-    else:
-        genswitch = 1
-        print('Producing driving data file ' + savefile)
-
-    if genswitch == 1:
-        # extract out coordinates to interpolate all variables on to 
-        intind = dnames.index(interpvar)
-        vlist = [name for name in snlist if filenames[intind] in os.path.basename(name)]
+    # for each variable in varnames...
+    data = []
+    for v in range(0, len(filenames)):
+        print('Processing ' + filenames[v])
+        # pull out only the files corresponding to this particular variable
+        vlist = [name for name in snlist if filenames[v] in os.path.basename(name)]
+        
+        # open all the files selected into one xarray dataset using dask
+        #print('Opening ' + str(vlist))
         dataset = xr.open_mfdataset(vlist, parallel=True, combine='by_coords')
+        #print(dataset)
+        # subset to required time period
         subsetds = dataset.sel(time=slice(times[0][:4] + '-' + times[0][4:6] + '-' + times[0][6:8], \
                                           times[-1][:4] + '-' + times[-1][4:6] + '-' + times[-1][6:8]))
-        interpxs = subsetds[xnames[intind]]
-        interpys = subsetds[ynames[intind]]
-        interpts = subsetds[tnames[intind]]
+        
+        # interpolate onto common grid (if already on the common grid, nothing will happen)
+        subsetinterp = subsetds.interp({xnames[v]: interpxs, ynames[v]: interpys},
+                                       kwargs={'fill_value': None})
+        
+        # ensure time coordinate metadata and labels are the same between datasets
+        subsetinterp[tnames[v]] = interpts
+        #print(subsetds)
+        
+        if mask==1:
+            print('Masking data to ' + str(countries))
+            subsetinterp = country_subset_shapefile(data=subsetinterp, sfname=sfname, IDname='ADMIN', IDs=countries,
+                                                    xname=xnames[intind], yname=ynames[intind], drop=False)
+            
+        if crop=='wheat':
+            # mask out non-crop areas
+            # currently only used for wheat crop
+            # and for lon/lat driving data - will need to adapt this to work with UKCP18 data
+            # or create a new cropmap/irrmap in the UKCP18 x/y coords
+            if cropmask==1:
+                cropmap = xr.load_dataarray(cmfile)
+                cropmap = cropmap.interp({'lon': subsetinterp[xnames[intind]], 'lat': subsetinterp[ynames[intind]]})
+                subsetinterp = subsetinterp.where(cropmap > cropthresh)
+                
+        subsetinterp = subsetinterp.rename({xnames[intind]: 'x', ynames[intind]: 'y'})
+        data.append(subsetinterp)
+        
+    print('Merging data')
+    mergedata = xr.merge(data)
+    
+    print('Processing, extracting and loading data to memory')
+    with ProgressBar():
+        mergedata.load()
 
-        # for each variable in varnames...
-        data = []
-        alldata = {}
-        for v in range(0, len(filenames)):
-            print('Processing ' + filenames[v])
-            # pull out only the files corresponding to this particular variable
-            vlist = [name for name in snlist if filenames[v] in os.path.basename(name)]
-
-            # open all the files selected into one xarray dataset using dask
-            #print('Opening ' + str(vlist))
-            dataset = xr.open_mfdataset(vlist, parallel=True, combine='by_coords')
-            #print(dataset)
-            # subset to required time period
-            subsetds = dataset.sel(time=slice(times[0][:4] + '-' + times[0][4:6] + '-' + times[0][6:8], \
-                                              times[-1][:4] + '-' + times[-1][4:6] + '-' + times[-1][6:8]))
-
-            # interpolate onto common grid (if already on the common grid, nothing will happen)
-            subsetinterp = subsetds.interp({xnames[v]: interpxs, ynames[v]: interpys},
-                                           kwargs={'fill_value': None})
-
-            # ensure time coordinate metadata and labels are the same between datasets
-            subsetinterp[tnames[v]] = interpts
-            #print(subsetds)
-
-            if mask==1:
-                print('Masking data to ' + str(countries))
-                subsetinterp = country_subset_shapefile(data=subsetinterp, sfname=sfname, IDname='ADMIN', IDs=countries,
-                                                        xname=xnames[intind], yname=ynames[intind], drop=False)
-
-            if crop=='wheat':
-                # mask out non-crop areas
-                # currently only used for wheat crop
-                # and for lon/lat driving data - will need to adapt this to work with UKCP18 data
-                # or create a new cropmap/irrmap in the UKCP18 x/y coords
-                if cropmask==1:
-                    cropmap = xr.load_dataarray(cmfile)
-                    cropmap = cropmap.interp({'lon': subsetinterp[xnames[intind]], 'lat': subsetinterp[ynames[intind]]})
-                    subsetinterp = subsetinterp.where(cropmap > cropthresh)
-
-            subsetinterp = subsetinterp.rename({xnames[intind]: 'x', ynames[intind]: 'y'})
-            data.append(subsetinterp)
-
-        print('Merging data')
-        mergedata = xr.merge(data)
-
-        print('Processing and saving to disk')
-        with ProgressBar():
-            mergedata.to_netcdf(savefile)
-
-    return savefile
+    return mergedata
 
 
 def getnames(basedatasetname, precipname, radname, crop):
@@ -550,7 +509,7 @@ def getnames(basedatasetname, precipname, radname, crop):
             tnames = ['time']
     elif basedatasetname == 'ukcp18bc':
         if crop == 'grass':
-            fnames = ["pr", "tasmax", "tasmin", "hurs", "rsds", "sfcWind", "tas"]
+            fnames = ["pr", "tasmax", "tasmin", "hurs", "rss", "sfcWind", "tas"]
             vnames = fnames
             dnames = ['prec', 'tmax', 'tmin', 'rh', 'solarrad', 'wind', 'tmean']
             xnames = ['x']
@@ -2582,7 +2541,7 @@ def country_subset_shapefile(data=None, datafile=None, multifile=0, sfname=None,
         if multifile == 1:
             data = xr.open_mfdataset(datafile, parallel=True)
         else:
-            data = xr.load_dataset(filein)
+            data = xr.load_dataset(datafile)
 
     subset = add_shape_coord_from_data_array(data, sfname, IDname, IDs, yname, xname)
     if drop==True:

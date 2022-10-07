@@ -26,24 +26,64 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
     Tdp <- rh
   }
   
-  ## Set weather datasets for testing
-  ##Tt <- temp_tas ## Mean daily temperature data (degrees C)
-  ##Ttmn <- temp_tasmin
-  ##Ttmx <-  temp_tasmax
-  ##Rr <- temp_rss ## shortwave radiation data (MJ m-2 day-1) 
-  ##prec <- temp_pr ## daily rainfall (mm)
-  ##rh <- temp_hurs ## Relative humidity (%)
-  ##wind <- temp_wind ## Wind speed 
-  ## Q <- 18.81 ## energy content of herbage dry matter (18.81 MJ kg-1) 
-  ## SMDmax <- 110
-  ## SMDc <- 10
-  ## cconc = temp_cconc
-
-  ## units conversion
-  if (datasetname %in% "ukcp18" | grepl('ceres', radname, fixed=TRUE)) {
-    print('Converting rad units from W/m^2 --> MJ/m^2/day')
-    Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+  if (datasetname %in% "ukcp18") {
+    print('Using UKCP18 data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: mm')
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad, units W/m^2, converting to MJ/m^2/day')
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day		
+    } else {
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day	
+      print('Solar rad: W/m^2, converting to MJ/m^2/day')
+    }
   }
+
+  if (datasetname %in% "ukcp18bc") {
+    print('Using UKCP18 Bias Corrected (CHESS-SCAPE) data, units:')
+    print('Temperature: Converting from Kelvin to Celsius')
+    Tt <- Tt - 273.15                                             
+    Ttmx <- Ttmx - 273.15
+    Ttmn <- Ttmn - 273.15 ## all Kelvin --> Celsius
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad')
+      print('Converting rad units from W/m^2 --> MJ/m^2/day')
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+    } else {
+      print('Converting rad units from W/m^2 --> MJ/m^2/day')
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+    }
+  }
+
+
+  if (datasetname %in% "chess_and_haduk") {
+    print('Using chess-met and HadUK data, units:')
+    print('Temperature: Celsius')
+    if (precipname %in% "aphrodite") {
+      print('Using aphrodite for precip, units mm')
+    } else {
+      print('Precip: Converting from kg/m^2/s to mm/day')
+      prec <- prec*86400
+    }
+    if (grepl('ceres', radname, fixed=TRUE)) {
+      print('Using ceres for solar rad')
+      print('Converting rad units from W/m^2 --> MJ/m^2/day')
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+    } else {
+      print('Converting rad units from W/m^2 --> MJ/m^2/day')
+      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+    }
+  }  
 
   ## These conversions only necessary for era5 data
   if (datasetname %in% "era5") {
@@ -59,6 +99,9 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
       Rr <- Rr/1000000
     }
   }
+
+
+################################################
   
   
   ## Get elevation data
@@ -115,13 +158,11 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   lambda <- 2.45 ## latent heat of vaporisation
 
   Eo <- (0.6108 * exp((17.27*Tt) / (Tt + 237.3))) ## Saturation vapour pressure
-  if(datasetname=='ukcp18'){
-    Ea <- (rh/100) * Eo ## Actual vapour pressure
-  }
   if(datasetname %in% 'era5'){
-    Ea <- (0.6108 * exp((17.27*Tdp) / (Tdp + 237.3))) ## Actual vapour pressure = Saturation vapour pressure at dew point
-  }
-  VPD <- Eo - Ea ## Vapout pressure deficit
+    Ea <- (0.6108 * exp((17.27*Tdp) / (Tdp + 237.3))) } ## Actual vapour pressure = Saturation vapour pressure at dew point
+   else {
+    Ea <- (rh/100) * Eo }   
+  VPD <- Eo - Ea ## Vapour pressure deficit
   delta <- (4098 * Eo) / (Tt + 237.3)^2 ## slope of saturation vapour pressure-temperature curve
   if (!is.null(elevfile)){
     print('Using elevfile')
