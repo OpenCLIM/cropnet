@@ -50,9 +50,9 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
 '''
 
 dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape_RCP26/**/*.nc"
-saveloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/driving_datafiles/ukcp18bc_rcp26'
 outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp26"
 AWCrast = "/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/MaxWet1.tif"
+elevfile = '/gws/nopw/j04/ceh_generic/matbro/cropnet/data/NextMap_DTM_50m.tif'
 CO2file = 'None'
 simx = '01'
 crop='wheat'
@@ -61,6 +61,9 @@ basedatasetname = 'ukcp18bc'
 startyear=int(sys.argv[1])
 startmonth=int(sys.argv[2])
 startday=1
+
+if crop=='grass':
+    AWCrast = None
 
 if basedatasetname == 'chess_and_haduk':
     caltype = 'gregorian'
@@ -82,8 +85,6 @@ endday=enddate.day
 
 if not os.path.exists(outloc):
     os.makedirs(outloc)
-if not os.path.exists(saveloc):
-    os.makedirs(saveloc)
 
 if startyear == endyear:
     years = [startyear]
@@ -133,19 +134,36 @@ for year in years:
 
     times = np.array([str(t.year)+'{:02.0f}'.format(t.month)+'{:02.0f}'.format(t.day) for t in list(gyeardates)])
 
-r['source']('Lynch_potpredict_v2_MJB.R')
+if crop == 'wheat':
+    r['source']('Lynch_potpredict_v2_MJB.R')
+elif crop == 'grass':
+    r['source']('Grass_potpredict_MJB.R')
+else:
+    SyntaxError('crop must be either wheat or grass, currently it is ' + str(crop))
 dd = load_driving_data(basedatasetname, times,
-                       dataloc, saveloc, simx, crop, AWCrast, CO2file)
+                       None, dataloc, simx, crop, AWCrast, CO2file)
 
 tmean = dd['tmean']
 tmax  = dd['tmax']
 tmin  = dd['tmin']
 prec  = dd['prec']
 solarrad = dd['solarrad']
-AWC = dd['AWC']
 x = dd['x']
 y = dd['y']
 t = dd['t']
+if crop == 'wheat':
+    AWC = dd['AWC']
+elif crop == 'grass':
+    if basedatasetname == 'era5':
+        # era5 has dew point instead of rh
+        tdp = dd['tdp']
+        # we use sfcP to determine elevation when using era5, instead of a raster file
+        sfcP = dd['sfcP']
+    else:
+        tdp = dd['rh']
+        sfcP = 0
+    wind  = dd['wind']
+
 FCO2 = True
 try:
     cconc = dd['cconc']
@@ -155,54 +173,77 @@ except KeyError:
     FCO2 = False
 
 # Convert these to lon,lat
-proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
-xx,yy = np.meshgrid(x,y)
-try:
-    lons,lats = proj.transform(xx, yy, errcheck=True)
-except pyproj.exceptions.ProjError:
-    lons,lats = proj.transform(xx, yy, errcheck=True)
+if crop == 'wheat':
+    proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
+    xx,yy = np.meshgrid(x,y)
+    try:
+        lons,lats = proj.transform(xx, yy, errcheck=True)
+    except pyproj.exceptions.ProjError:
+        lons,lats = proj.transform(xx, yy, errcheck=True)
 
-GAIfunc = r['GAI']
-print('Running model, calculating GAI')
-datalist = GAIfunc(tmean, tmax, tmin, prec, solarrad, x, y, t, lats, basedatasetname)
-GAI = np.array(datalist.rx2('GAI'))
-tmean       = np.array(datalist.rx2('tmean'))
-tmin        = np.array(datalist.rx2('tmin'))
-tmax        = np.array(datalist.rx2('tmax'))
-prec        = np.array(datalist.rx2('prec'))
-solarrad    = np.array(datalist.rx2('solarrad'))
-Jarray      = np.array(datalist.rx2('Jarray'))
-Cday        = np.array(datalist.rx2('Cday'))
-CDD         = np.array(datalist.rx2('CDD'))
-TT          = np.array(datalist.rx2('TT'))
-GSS_r       = datalist.rx2('GSS')
-GSS         = np.array(datalist.rx2('GSS')) # As it's a string array it comes out as a flattened array               
-GSS         = GSS.reshape((GSS_r.dim[2], GSS_r.dim[1], GSS_r.dim[0]))
-GSS         = GSS.transpose(2,1,0) # therefore we need to manually reshape it                                         
-HarvestJday = datalist.rx2('HarvestJday')
+if crop == 'grass':
+    grassfunc = r['grass_py']
+    print('Running grass model')
+    datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
+                         x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
+                         elevfile=elevfile, sfcP=sfcP)
 
-r['source']('Lynch_potpredict_v2_MJB.R')
-yieldfunc = r['wheat_yield']
-print('Calculating yield')
-datalist2 = yieldfunc(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, x, y, cconc, FCO2=FCO2)
-WUyield = np.array(datalist2.rx2('WUyield'))
-WLyield = np.array(datalist2.rx2('WLyield'))
-WLHLyield = np.array(datalist2.rx2('WLHLyield'))
-WUHLyield = np.array(datalist2.rx2('WUHLyield'))
-WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
-WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
-WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
-WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
-WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
-WLyieldxr.name = 'water_limited_potential_wheat_yield'
-WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
-WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
-enddatestr = fnenddate.strftime('%b%d')
-WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
-WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
-WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
-WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
+    PET = np.array(datalist.rx2('PET'))
+    AET = np.array(datalist.rx2('AET'))
+    SMD = np.array(datalist.rx2('SMD'))
+    Yp  = np.array(datalist.rx2('Yp'))
+    Ya  = np.array(datalist.rx2('Ya'))
+    YaSum = np.array(datalist.rx2('YaSum'))
+    
+    outfile = os.path.join(outloc, 'yields_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+    outputsave(YaSum, [y, x], ['y', 'x'], endyear, 'yield', 'tn/hc', outfile)
+    outfile = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+    outputsave(Ya.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Actual_yield', 'tn/hc', outfile)
+    outfile = os.path.join(outloc, 'Yp_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+    outputsave(Yp.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Potential_yield', 'tn/hc', outfile)
+
+elif crop == 'wheat':
+    GAIfunc = r['GAI']
+    print('Running model, calculating GAI')
+    datalist = GAIfunc(tmean, tmax, tmin, prec, solarrad, x, y, t, lats, basedatasetname)
+    GAI = np.array(datalist.rx2('GAI'))
+    tmean       = np.array(datalist.rx2('tmean'))
+    tmin        = np.array(datalist.rx2('tmin'))
+    tmax        = np.array(datalist.rx2('tmax'))
+    prec        = np.array(datalist.rx2('prec'))
+    solarrad    = np.array(datalist.rx2('solarrad'))
+    Jarray      = np.array(datalist.rx2('Jarray'))
+    Cday        = np.array(datalist.rx2('Cday'))
+    CDD         = np.array(datalist.rx2('CDD'))
+    TT          = np.array(datalist.rx2('TT'))
+    GSS_r       = datalist.rx2('GSS')
+    GSS         = np.array(datalist.rx2('GSS')) # As it's a string array it comes out as a flattened array               
+    GSS         = GSS.reshape((GSS_r.dim[2], GSS_r.dim[1], GSS_r.dim[0]))
+    GSS         = GSS.transpose(2,1,0) # therefore we need to manually reshape it                                         
+    HarvestJday = datalist.rx2('HarvestJday')
+    
+    yieldfunc = r['wheat_yield']
+    print('Calculating yield')
+    datalist2 = yieldfunc(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, x, y, cconc, FCO2=FCO2)
+    WUyield = np.array(datalist2.rx2('WUyield'))
+    WLyield = np.array(datalist2.rx2('WLyield'))
+    WLHLyield = np.array(datalist2.rx2('WLHLyield'))
+    WUHLyield = np.array(datalist2.rx2('WUHLyield'))
+    WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
+    WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
+    WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
+    WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
+    WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
+    WLyieldxr.name = 'water_limited_potential_wheat_yield'
+    WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
+    WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
+    enddatestr = fnenddate.strftime('%b%d')
+    WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+    WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+    WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+    WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+    WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
+    WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
+    WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
+    WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
+
