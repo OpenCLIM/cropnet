@@ -363,7 +363,7 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
 
     # get list of extracted nc files
     nlist = glob.glob(dataloc, recursive=True)
-    print(nlist)
+    #print(nlist)
 
     # pull out only files corresponding to this ensemble member
     if basedatasetname == 'ukcp18':
