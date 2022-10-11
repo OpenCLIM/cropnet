@@ -395,7 +395,7 @@ def process_driving_data(basedatasetname, filenames, vnames, dnames, xnames, yna
     # for each variable in varnames...
     data = []
     for v in range(0, len(filenames)):
-        print('Processing ' + filenames[v])
+        #print('Processing ' + filenames[v])
         # pull out only the files corresponding to this particular variable
         vlist = [name for name in snlist if filenames[v] in os.path.basename(name)]
         
