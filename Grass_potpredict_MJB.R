@@ -211,7 +211,6 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   ##if(is.null(savepath) == FALSE){
   ##  writeRaster(WLPYrast, savepath,"GTiff", overwrite = TRUE)
   ##}
-  ## datalist <- list('PET'=PET, 'AET'=AET, 'SMD'=SMD, 'Yp'=Yp, 'Ya'=Ya, 'EaEp'=EaEp, 'Tt'=Tt, 'preRUE'=preRUE, 'RUE'=RUE, 'Rr'=Rr, 'x'=x, 'e'=e, 'YaSum'=YaSum, 'prec'=prec, 'P'=P, 'delta'=delta, 'Eo'=Eo, 'Ea'=Ea, 'VPD'=VPD)
   datalist <- list('PET'=PET, 'AET'=AET, 'SMD'=SMD, 'Yp'=Yp, 'Ya'=Ya, 'YaSum'=YaSum)
   return(datalist)
 }
