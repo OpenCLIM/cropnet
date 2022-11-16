@@ -142,6 +142,7 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   ##print(dim(RUE))
   ## CO2 fertilisation effect
   if(FCO2 == TRUE & cconc >350){
+    print('Doing CO2 fertilisation')
     if(cconc > 750){
       RUE <- RUE + RUE * (750/350 - 1) * 0.333 }
     else if(cconc <750){
