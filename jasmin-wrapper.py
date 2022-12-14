@@ -45,8 +45,8 @@ simx = '01'
 crop='wheat'
 basedatasetname = 'ukcp18bc'
 
-startyear=1981#int(sys.argv[1])
-startmonth=10#int(sys.argv[2])
+startyear=int(sys.argv[1])
+startmonth=int(sys.argv[2])
 startday=1
 
 if crop=='grass':
