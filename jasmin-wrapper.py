@@ -36,7 +36,7 @@ basedatasetname - Which driving dataset to use. This is used to determine the fi
                   Pre-configured options are 'ukcp18', 'ukcp18bc', 'era5', 'chess_and_haduk'.
 '''
 
-dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape_RCP26_test/**/*.nc"
+dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape_RCP26/**/*.nc"
 outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp26"
 AWCrast = "/gws/nopw/j04/ceh_generic/matbro/cropnet/data/AWC/G2G_derived_AWC/G2G_AWC_UK.nc"
 elevfile = '/gws/nopw/j04/ceh_generic/matbro/cropnet/data/NextMap_DTM_50m.tif'
@@ -171,9 +171,14 @@ for year in years:
     if crop == 'grass':
         grassfunc = r['grass_py']
         print('Running grass model')
-        datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
-                             x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
-                             elevfile=elevfile, sfcP=sfcP)
+        if basedatasetname == 'era5':
+            datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
+                                 x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
+                                 elevfile=elevfile, sfcP=sfcP)
+        else:
+            datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
+                                 x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
+                                 elevfile=elevfile)
     
         PET = np.array(datalist.rx2('PET'))
         AET = np.array(datalist.rx2('AET'))

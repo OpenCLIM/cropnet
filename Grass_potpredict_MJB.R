@@ -114,7 +114,7 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
     elev <- raster(elevfile)
     elevs <- matrix(extract(elev,  dat_SP, fun = mean, na.rm = TRUE), c(dim(X), dim(Y)))
     elevs <- t(elevs)
-    ##print(elevs)
+    print(elevs)
   }
   ##print(dim(elevs))
   ## Get julian days
@@ -125,7 +125,7 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   ## efficiency of radiation use at different temperature ranges
   etab <- data.frame(Tmn = c(-20,4.5,9.5,19,25,40), 
                      Tmx = c(4.5,9.5,19,25,40,100),
-                     aT = c(0,0.00893,0.00349,0.01750,0.04680,0),
+                     aT = c(0,-0.00893,0.00349,0.01750,0.04680,0),
                      bT = c(0,0.00204,0.00070,0,-0.00117,0) )
 
   ## Efficiency of conversion of radiation energy to herbage energy
@@ -165,11 +165,11 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
     Ea <- (rh/100) * Eo }   
   VPD <- Eo - Ea ## Vapour pressure deficit
   delta <- (4098 * Eo) / (Tt + 237.3)^2 ## slope of saturation vapour pressure-temperature curve
-  if (!is.null(elevfile)){
+  if (is.null(sfcP)){
     print('Using elevfile')
     P <- 101.3*((293-0.0065*array(elevs, dim(Tt))) / 293)^5.26 ## atmospheric pressure
   }
-  if (!is.null(sfcP)){
+  if (is.null(elevfile)){
     print('Using sfcP')
     P <- sfcP/1000.
   }
