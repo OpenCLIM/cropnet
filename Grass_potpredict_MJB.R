@@ -82,7 +82,7 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   ## efficiency of radiation use at different temperature ranges
   etab <- data.frame(Tmn = c(-20,4.5,9.5,19,25,40), 
                      Tmx = c(4.5,9.5,19,25,40,100),
-                     aT = c(0,0.00893,0.00349,0.01750,0.04680,0),
+                     aT = c(0,-0.00893,0.00349,0.01750,0.04680,0),
                      bT = c(0,0.00204,0.00070,0,-0.00117,0) )
 
   ## Efficiency of conversion of radiation energy to herbage energy

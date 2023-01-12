@@ -40,11 +40,13 @@ spec:
         title: start month
         description: Month to start in (from 1 - 12 inclusive)
         type: int
+        default: 10
         required: True
       - name: startday
         title: start day
         description: Day of the month to start in
         type: int
+        default: 1
         required: True
 
     dataslots:
