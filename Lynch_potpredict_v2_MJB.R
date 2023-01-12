@@ -72,7 +72,7 @@ return(data)
 }
 
 
-load_AWC <- function(X, Y, loc, dims){
+load_AWC <- function(X, Y, loc, datares, dims){
 coords <- expand.grid(as.numeric(X), as.numeric(Y))
 dat_SP <- SpatialPoints(coords, proj4string = CRS("+init=epsg:27700"))
 ## Read soils data, reproject and aggregate to coarser resolution
@@ -80,7 +80,11 @@ ukgrid <- "+init=epsg:27700"
 latlong <- "+init=epsg:4326"
 AWCrast <- raster(loc)
 projection(AWCrast) <- projection(ukgrid)
-AWCraster <- aggregate(AWCrast, 10, fun=mean)
+AWCres <- res(AWCrast)[0]
+resrat <- datares/AWCres
+if (resrat >= 2) {
+   AWCraster <- aggregate(AWCrast, floor(resrat), fun=mean)
+}
 ##print(AWCraster)
 ##print(dim(AWCraster))
 ## Extract soil AWC per grid cell - constant over time. 
@@ -108,7 +112,6 @@ return(AWC)
 
 # Set growth model function
 GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 'ukcp18', precipname = 'None', radname = 'None', Dt = 14, Tbase = 0, GAItab = NULL, HarvestJday = 243){
-
   if (datasetname %in% "ukcp18") {
     print('Using UKCP18 data, units:')
     print('Temperature: Celsius')
@@ -351,7 +354,7 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 
   
   ###### Account for failure to senesce pre-harvest (ANNOTATE THIS SECTION)
   Jarray <- array(rep(Jday,each = dim(tmean)[1]*dim(tmean)[2]), dim(tmean))
-  
+  print(dim(Jarray))
   ## Find day since sowing for harvest
   harvestCDD <- CDD          
   harvestCDD[Jarray > HarvestJday & Cday > 100] <- NA
@@ -745,7 +748,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
           
           ## Consecutive days of waterlogging
           wlog <- array(0,dim(fstart))
-          wlog[which(Cday >= fstart & Jarray <= HarvestJday & (PAWC+prec) > AWC)] <- 1
+          wlog[which(Cday >= fstart & Jarray <= HarvestJday[1] & (PAWC+prec) > AWC)] <- 1
           wlog <- aperm(apply(wlog, 1:2, function(x){
             ifelse(x == 1, unlist(sapply(rle(x)$lengths, seq)), 0)
           }), c(2,3,1))

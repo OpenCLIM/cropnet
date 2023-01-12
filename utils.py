@@ -129,33 +129,107 @@ def load_driving_data(basedatasetname, times,
     if crop=='wheat':
         print('Reading in AWC')
         interpdata = data
-        interpx = 'x'
-        interpy = 'y'
-        if basedatasetname=='era5':
-            AWCx = 'lon'
-            AWCy = 'lat'
-        else:
-            AWCx = 'x'
-            AWCy = 'y'
-        if basedatasetname=='ukcp18bc' or basedatasetname=='chess_and_haduk':
-            loadAWCnoagg = r['load_AWC_no_agg']
-            AWC = loadAWCnoagg(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
-            AWC = np.array(AWC).transpose(1,0,2)
-            AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
-        elif basedatasetname == 'era5':
-            AWC = xr.load_dataarray(AWCrast)
-            AWC = AWC.coarsen(lon=30, lat=30, boundary='pad').mean()
-            AWClist = []
+        interpx = 'x' # this is always x
+        interpy = 'y' # and this is always y even if lonlat data
+        # they are just variable names
+        
+        if AWCrast[-2:] == 'nc':
+            # netcdf data
+            AWCdataset = xr.open_dataset(AWCrast)
+            
+            for key in AWCdataset.keys():
+                if 'AWC' in key:
+                    AWC = AWCdataset[key]
+                    break
+                elif 'awc' in key:
+                    AWC = AWCdataset[key]
+                    break
+                elif 'Awc' in key:
+                    AWC = AWCdataset[key]
+                    break
+            else:
+                raise KeyError('AWC variable not found in ' + AWCrast)
+                    
+
+            # find out coordinate type (lon/lat or x/y)
+            for key in AWCdataset.dims:
+                if key == 'lon': 
+                    ctype = 'll'
+                    AWCx = 'lon'
+                    AWCy = 'lat'
+                    break
+                elif key == 'longitude':
+                    ctype = 'll'
+                    AWCx = 'longitude'
+                    AWCy = 'latitude'
+                    break
+                elif key == 'x': 
+                    ctype = 'xy'
+                    AWCx = 'x'
+                    AWCy = 'y'
+                    break
+                elif key == 'projection_x_coordinate':
+                    ctype = 'xy'
+                    AWCx = 'projection_x_coordinate'
+                    AWCy = 'projection_y_coordinate'
+                    break
+            else:
+                print('WARNING: Could not determine coord type, assuming x/y')
+                ctype = 'xy'
+                AWCx = 'x'
+                AWCy = 'y'
+
+            # coarsen/aggregate if necessary
+            # agg=True
+            datares = abs(data['x'][1] - data['x'][0]).values
+            AWCres  = abs(AWC[AWCx].values[1] - AWC[AWCx].values[0])
+            resrat = datares/AWCres
+            if resrat >= 2:
+                agg = True
+            else:
+                agg = False
+
+            if ctype == 'll':
+                # lon/lat
+                if agg:
+                    # coarsen by ratio of resolutions?
+                    resratagg = np.floor(resrat)
+                    if AWCx == 'lon':
+                        AWC = AWC.coarsen(lon=resratagg, lat=resratagg, boundary='pad').mean()
+                    elif AWCx == 'longitude':
+                        AWC = AWC.coarsen(longitude=resratagg, latitude=resratagg, boundary='pad').mean()
+                    
+            elif ctype == 'xy':
+                # x/y
+                if agg:
+                    # coarsen by ratio of resolutions?
+                    resratagg = np.floor(resrat)
+                    if AWCx == 'x':
+                        AWC = AWC.coarsen(x=resratagg, y=resratagg, boundary='pad').mean()
+                    elif AWCx == 'projection_x_coordinate':
+                        AWC = AWC.coarsen(projection_x_coordinate=resratagg, 
+                                          projection_y_coordinate=resratagg, boundary='pad').mean()
+
+            # Make the AWC three dimensional (add a time dimension)
+            AWClist=[]
             for ts in range(0,len(times)):
                 AWCtemp = AWC.expand_dims('t')
                 AWCtemp['t'] = [ts]
                 AWClist.append(AWCtemp)
             AWC = xr.concat(AWClist, dim='t')
+
         else:
+            # raster data
+            # raster data is unlikely to be lon/lat so we can ignore this case
+            
+            # aggregation logic built into R func
+            datares = abs(alldata['x'].values[1] - alldata['x'].values[0])
+            # use loadAWC R function
             loadAWC = r['load_AWC']
-            AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
+            AWC = loadAWC(x, y, AWCrast, datares, np.array(alldata[dnames[0]].transpose(1,0,2).shape))
             AWC = np.array(AWC).transpose(1,0,2)
             AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
+        
 
         print('Interpolating AWC onto common grid')
         AWC = AWC.interp({AWCx: interpdata[interpx], AWCy: interpdata[interpy]}, kwargs={"fill_value": None})
