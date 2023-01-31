@@ -127,7 +127,7 @@ GAI <- function(tmean, tmax, tmin, prec, solarrad, X, Y, T, lats, datasetname = 
     }
   }
   if (datasetname %in% "ukcp18bc") {
-    print('Using UKCP18 Bias Corrected (CHESS-SCAPE) data, units:')
+    print('Using UKCP18 1km (CHESS-SCAPE) data, units:')
     print('Temperature: Converting from Kelvin to Celsius')
     tmean <- tmean - 273.15                                             
     tmax <- tmax - 273.15
