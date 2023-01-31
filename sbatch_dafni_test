@@ -1,0 +1,11 @@
+#!/bin/bash -l
+#SBATCH --partition=high-mem
+#SBATCH -o %j.out
+#SBATCH -e %j.err
+#SBATCH --time=2:00:00
+#SBATCH --mem=200000
+
+export PATH=/home/users/mattjbr/anaconda3/bin:$PATH
+source /home/users/mattjbr/anaconda3/bin/activate s2lai
+cd /gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet-dafni
+/home/users/mattjbr/anaconda3/envs/s2lai/bin/python docker-wrapper.py

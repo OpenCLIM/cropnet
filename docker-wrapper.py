@@ -70,7 +70,7 @@ elif RCP == '8.5_06':
 elif RCP == '8.5_12':
     CO2file = '/CHESS-SCAPE_RCP85_12.csv'
 elif RCP == '2.6':
-    CO2file = '/UKCP18_CO2_RCP26.csv'
+    CO2file = '/CHESS-SCAPE_RCP26.csv'
 else:
     CO2file = 'None'
 
