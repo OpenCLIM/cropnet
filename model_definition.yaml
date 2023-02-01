@@ -1,4 +1,4 @@
-kind: Model
+kind: M
 api_version: v1beta2
 metadata:
   display_name: CropNET Wheat model
@@ -17,36 +17,37 @@ spec:
         title: RCP Scenario
         description: Which Scenario to use for CO2 fertilisation, corresponding to the scenario used in the UKCP18 model runs. Only one scenario was used for RCP2.6. 4 are available for RCP8.5, corresponding to the ensemble members that were downscaled to 1km from 12km spatial resolution. Note that this only changes the CO2 concentrations in the model, it does not change the driving data. Data is available for 4 ensemble members for both RCP2.6 and 8.5. It is recommended that the scenario selected matches the driving data used, e.g. RCP Scenario '8.5_06' should be used when the driving data is ensemble member 06 RCP8.5. To turn off CO2 fertilisation choose the 'off' option.
         type: string
-        default: 8.5_01
+        default: "8.5_01"
         required: True
         options:
-          - name: 8.5_01
+          - name: "8.5_01"
             title: 8.5_01
-          - name: 8.5_04
+          - name: "8.5_04"
             title: 8.5_04
-          - name: 8.5_06
+          - name: "8.5_06"
             title: 8.5_06
-          - name: 8.5_12
+          - name: "8.5_12"
             title: 8.5_12
-          - name: 2.6
+          - name: "2.6"
             title: 2.6
-          - name: off
+          - name: "off"
             title: off
       - name: startyear
         title: start year
         description: Year to start in
-        type: int
+        type: integer
+        default: 1980
         required: True
       - name: startmonth
         title: start month
         description: Month to start in (from 1 - 12 inclusive)
-        type: int
+        type: integer
         default: 10
         required: True
       - name: startday
         title: start day
         description: Day of the month to start in
-        type: int
+        type: integer
         default: 1
         required: True
 
@@ -56,7 +57,7 @@ spec:
           The climate data used to drive the crop model. Must contain daily precip, net solar, 
           mean, max and min air temperature. Must have timespan in filenames as yyyymmdd-yyyymmdd
         default:
-          - # To be filled 23c61169-8345-42bd-b0ce-375527495cac
+          - be0c58f0-3373-41c7-bad5-a0ab755090ef
         path: inputs/drivingdata/
         required: true
 
