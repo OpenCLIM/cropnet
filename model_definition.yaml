@@ -1,5 +1,5 @@
 kind: Model
-api_version: v1beta1
+api_version: v1beta2
 metadata:
   display_name: CropNET Wheat model
   name: cropnet-wheat
@@ -7,14 +7,7 @@ metadata:
   summary: >
     A crop model predicting potential wheat yield from climate data 
   description: >
-    Created by John Redhead and Matt Brown at UKCEH as part of the CropNET and OpenCLIM projects. 
-    Potential yield is the maximum possible yield acheivable given the climate conditions and in 
-    the absence of any other limiting factors such as pests. Water limitation, heat stress and 
-    CO2 fertilisation (optional) are included. The resolution of the model is the resolution of
-    the driving data provided. Water stress and saturation are determined using an 'available 
-    water capacity' derived from the SHETRAN hydrological model. Mode will run for one calendar
-    year from starting data specified. See Lynch et al. 2017 for more details on the model. 
-    details (https://www.jstor.org/stable/26609794)
+    The CropNet_Wheat yield model simulates ‘potential’ yield of wheat growing under rainfed conditions in the UK, based on key meteorological inputs (solar radiation, temperature and precipitation). The model accounts for climatic variables, soil effects on water availability, and day length, but assumes no impact from non-climatic, agronomic parameters such as crop nutrition, pests or diseases.  The model does account the impacts of variation in sowing date, and the user can select whether to include the impacts of water limitation, direct heat stress and CO2 fertilisation.  The model runs at daily timesteps and outputs annual yield per hectare. The model has been designed and calibrated to produce efficient estimates of crop yield impacts over relatively large spatial extents and long timescales (i.e. climate change impacts on patterns of yield across the UK).
   source_code: https://github.com/OpenCLIM/cropnet
 
 spec:
