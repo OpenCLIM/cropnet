@@ -21,35 +21,41 @@ spec:
         required: True
         options:
           - name: "8.5_01"
-            title: 8.5_01
+            title: "8.5_01"
           - name: "8.5_04"
-            title: 8.5_04
+            title: "8.5_04"
           - name: "8.5_06"
-            title: 8.5_06
+            title: "8.5_06"
           - name: "8.5_12"
-            title: 8.5_12
+            title: "8.5_12"
           - name: "2.6"
-            title: 2.6
+            title: "2.6"
           - name: "off"
-            title: off
+            title: "off"
       - name: startyear
         title: start year
         description: Year to start in
         type: integer
-        default: 1980
+        default: 1981
         required: True
+        min: 1981
+        max: 1989
       - name: startmonth
         title: start month
         description: Month to start in (from 1 - 12 inclusive)
         type: integer
         default: 10
         required: True
+        min: 1
+        max: 12
       - name: startday
         title: start day
-        description: Day of the month to start in
+        description: Day of the month to start in. Note that a 360 day calendar is used (30 days in each month)
         type: integer
         default: 1
         required: True
+        min: 1
+        max: 30
 
     dataslots:
       - name: Climate driving data
