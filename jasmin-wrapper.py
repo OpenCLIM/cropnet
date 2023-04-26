@@ -14,40 +14,151 @@ import os
 numpy2ri.activate()
 
 '''
-Wrapper to run the CropNET/EcoCrop crop models on the JASMIN LOTUS HPC cluster
+Wrapper to run the CropNet crop models on the JASMIN LOTUS HPC cluster
 
 Input options:
-dataloc - Location of all the meteorological driving data files. Use wildcards
-          to ensure all files are selected. '**' means 'all folders'
-saveloc - Location to store the processed driving data files that are created
-          by the data read-in routine
-outloc  - Where to store the final yield outputs of the model
-AWCrast - File path of the available water content file as a geotiff raster
-CO2file - File path of the CO2 concentrations file as a csv file with two columns,
-          the year and the CO2 conc in ppm. Set to 'None' (including quotes) to 
-          disable the CO2 fertlisation option.
-simx    - Only used if basedatasetname is 'ukcp18'. Ignored otherwise. Identifies the
-          ensemble member to use by selecting out the driving data files with the 
-          specified simx in the their name
-crop    - Currently redundant as only wheat crop is supported
-basedatasetname - Which driving dataset to use. This is used to determine the file and
-                  variable names to look for in the data read-in routine. These can be
-                  configured if necessary by editing the 'getnames' function directly.
-                  Pre-configured options are 'ukcp18', 'ukcp18bc', 'era5', 'chess_and_haduk'.
+datalocbase - Location of all the meteorological driving data files. 
+              With subfolders within for the different rcp/ensmem permutations.
+outlocbase -- Where to store the final yield outputs of the model. Subfolders based
+              on the crop, ensmem and basedataset will be created under here.
+AWCrast ----- File path of the available water content file as a geotiff raster or netcdf file.
+CO2filesloc - Location of the folder containing the CO2 concentrations files as csv files with two columns,
+              the year and the CO2 conc in ppm. Set to 'None' (including quotes) to 
+              disable the CO2 fertlisation option.
+simx -------- Only used if basedatasetname is 'ukcp18'. Ignored otherwise. Identifies the
+              ensemble member to use by selecting out the driving data files with the 
+              specified simx in the their name
+crop -------- Crop to model. Can be 'wheat', 'grass' or 'OSR'
+basedatasetname - Which driving dataset to use, along with possible rcp and ensmem identifiers.
+                  This is used to determine the file and variable names to look for in the 
+                  data read-in routine. These can be configured if necessary by editing the 'getnames' function directly.
+                  Pre-configured options are 'ukcp18', 'era5', 'chess_and_haduk',
+                  'chess-scape_8.5_01', 'chess-scape_8.5_04', 'chess-scape_8.5_06', 'chess-scape_8.5_15', 
+                  'chess-scape_2.6_01', 'chess-scape_2.6_04', 'chess-scape_2.6_06', 'chess-scape_2.6_15'.
 '''
 
-dataloc = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata/chess-scape_RCP26/**/*.nc"
-outloc  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/ukcp18bc_rcp26"
+datalocbase = "/gws/nopw/j04/ceh_generic/matbro/cropnet/drivingdata"
+outlocbase  = "/gws/nopw/j04/ceh_generic/matbro/cropnet/outputs/no_assim/"
+CO2filesloc = '/gws/nopw/j04/ceh_generic/matbro/cropnet/openclim-cropnet/CO2_files/'
 AWCrast = "/gws/nopw/j04/ceh_generic/matbro/cropnet/data/AWC/G2G_derived_AWC/G2G_AWC_UK.nc"
 elevfile = '/gws/nopw/j04/ceh_generic/matbro/cropnet/data/NextMap_DTM_50m.tif'
-CO2file = 'None'
+CO2 = sys.argv[3] # '8.5', '8.5_01', '8.5_04', '8.5_06', '8.5_15', '2.6' or 'None'
 simx = '01'
-crop='wheat'
-basedatasetname = 'ukcp18bc'
+crop= sys.argv[1] # 'wheat', 'grass' or 'OSR'
+basedatasetname = sys.argv[2] 
+# 'ukcp18', 'chess-scape_8.5_01', 'chess-scape_8.5_04', 'chess-scape_8.5_06', 'chess-scape_8.5_15', 
+# 'chess-scape_2.6_01', 'chess-scape_2.6_04', 'chess-scape_2.6_06', 'chess-scape_2.6_15', 'era5', 'chess_and_haduk'
 
-startyear=int(sys.argv[1])
-startmonth=int(sys.argv[2])
+startyear=int(sys.argv[4])
+startmonth=int(sys.argv[5])
 startday=1
+
+if CO2 == '8.5':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_01.csv')
+elif CO2 == '8.5_01':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_01.csv')
+elif CO2 == '8.5_04':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_04.csv')
+elif CO2 == '8.5_06':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_06.csv')
+elif CO2 == '8.5_15':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_15.csv')
+elif CO2 == '2.6':
+    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP26.csv')
+else:
+    print('Unrecognised or no CO2 option specified, running without CO2 fertilisation')
+    CO2file = 'None'
+
+if basedatasetname == 'ukcp18':
+    insubfolder = 'ukcp18/**/*.nc'
+    outsubfolder = crop + '/ukcp18'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_8.5_01':
+    insubfolder = 'chess-scape/rcp85/01/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp85_noCO2/01'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp85/01'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_8.5_04':
+    insubfolder = 'chess-scape/rcp85/04/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp85_noCO2/04'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp85/04'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_8.5_06':
+    insubfolder = 'chess-scape/rcp85/06/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp85_noCO2/06'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp85/06'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_8.5_15':
+    insubfolder = 'chess-scape/rcp85/15/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp85_noCO2/15'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp85/15'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_2.6_01':
+    insubfolder = 'chess-scape/rcp26/01/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp26_noCO2/01'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp26/01'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_2.6_04':
+    insubfolder = 'chess-scape/rcp26/04/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp26_noCO2/04'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp26/04'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_2.6_06':
+    insubfolder = 'chess-scape/rcp26/06/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp26_noCO2/06'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp26/06'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess-scape_2.6_15':
+    insubfolder = 'chess-scape/rcp26/15/**/*.nc'
+    if CO2file == 'None':
+        outsubfolder = crop + 'chess-scape/rcp26_noCO2/15'
+    else:
+        outsubfolder = crop + 'chess-scape/rcp26/15'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'era5':
+    insubfolder = 'era5/**/*.nc'
+    outsubfolder = 'era5'
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
+elif basedatasetname == 'chess_and_haduk':
+    insubfolder = 'chess_and_haduk/**/*.nc'
+    outsubfolder = 'chess_and_haduk'
+    dataloc = os.path.join(datalocbase, insubfolder
+    outloc = os.path.join(outlocbase, outsubfolder))
+
+print('################## RUN INFO ###################')
+print('Crop: ' + crop)
+print('Dataset: ' + basedatasetname)
+print('CO2 Scenario: ' + CO2)
+print('Starting year: ' + str(startyear))
+print('Starting month: ' + str(startmonth))
+print('Starting day: ' + str(startday))
+print('Data input path: ' + dataloc)
+print('Output path: ' + outloc)
+print('###############################################')
 
 if crop=='grass':
     AWCrast = None
@@ -123,10 +234,12 @@ for year in years:
 
     if crop == 'wheat':
         r['source']('Lynch_potpredict_v2_MJB.R')
+    elif crop == 'OSR':
+        r['source']('OSR_potpredict_MJB.R')
     elif crop == 'grass':
         r['source']('Grass_potpredict_MJB.R')
     else:
-        SyntaxError('crop must be either wheat or grass, currently it is ' + str(crop))
+        SyntaxError('crop must be either wheat, grass or OSR. Currently it is ' + str(crop))
     dd = load_driving_data(basedatasetname, times,
                            None, dataloc, simx, crop, AWCrast, CO2file)
     
@@ -138,7 +251,7 @@ for year in years:
     x = dd['x']
     y = dd['y']
     t = dd['t']
-    if crop == 'wheat':
+    if crop == 'wheat' or crop == 'OSR':
         AWC = dd['AWC']
     elif crop == 'grass':
         if basedatasetname == 'era5':
@@ -217,6 +330,34 @@ for year in years:
         yieldfunc = r['wheat_yield']
         print('Calculating yield')
         datalist2 = yieldfunc(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cday, GSS, HarvestJday, CDD, TT, x, y, cconc, FCO2=FCO2)
+        WUyield = np.array(datalist2.rx2('WUyield'))
+        WLyield = np.array(datalist2.rx2('WLyield'))
+        WLHLyield = np.array(datalist2.rx2('WLHLyield'))
+        WUHLyield = np.array(datalist2.rx2('WUHLyield'))
+        WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
+        WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
+        WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
+        WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
+        WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
+        WLyieldxr.name = 'water_limited_potential_wheat_yield'
+        WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
+        WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
+        enddatestr = fnenddate.strftime('%b%d')
+        WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
+        WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
+        WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
+        WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
+
+    elif crop == 'OSR':
+        yieldfunc = r['osr_py']
+        print('Running OSR model, calculating yield')
+        datalist2 = yieldfunc(tmean, tmax, tmin, prec, solarrad, 
+                              AWC, x, y, t, cconc, datasetname = basedatasetname, 
+                              FCO2=FCO2)
         WUyield = np.array(datalist2.rx2('WUyield'))
         WLyield = np.array(datalist2.rx2('WLyield'))
         WLHLyield = np.array(datalist2.rx2('WLHLyield'))

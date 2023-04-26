@@ -38,6 +38,7 @@ r = robjects.r
 try:
     r['source']('Grass_potpredict_MJB.R') # define R functions
     r['source']('Lynch_potpredict_v2_MJB.R')
+    r['source']('OSR_potpredict_MJB.R')
 except rpy2.rinterface.embedded.RRuntimeError:
     print('Warning: R crop model files not available')
 
@@ -130,7 +131,7 @@ def load_driving_data(basedatasetname, times,
             alldata['irrprop'] = irrprop.values
 
     # process AWC
-    if crop=='wheat':
+    if crop=='wheat' or crop=='OSR':
         print('Reading in AWC')
         interpdata = data
         interpx = 'x' # this is always x
@@ -235,33 +236,6 @@ def load_driving_data(basedatasetname, times,
             AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
         
 
-        ## ADAPTING THIS BLOCK ABOVE
-        #if basedatasetname=='era5':
-        #    AWCx = 'lon'
-        #    AWCy = 'lat'
-        #else:
-        #    AWCx = 'x'
-        #    AWCy = 'y'
-        #if basedatasetname=='ukcp18bc' or basedatasetname=='chess_and_haduk':
-        #    loadAWCnoagg = r['load_AWC_no_agg']
-        #    AWC = loadAWCnoagg(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
-        #    AWC = np.array(AWC).transpose(1,0,2)
-        #    AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
-        #elif basedatasetname == 'era5':
-        #    AWC = xr.load_dataarray(AWCrast)
-        #    AWC = AWC.coarsen(lon=30, lat=30, boundary='pad').mean()
-        #    AWClist = []
-        #    for ts in range(0,len(times)):
-        #        AWCtemp = AWC.expand_dims('t')
-        #        AWCtemp['t'] = [ts]
-        #        AWClist.append(AWCtemp)
-        #    AWC = xr.concat(AWClist, dim='t')
-        #else:
-        #    loadAWC = r['load_AWC']
-        #    AWC = loadAWC(x, y, AWCrast, np.array(alldata['tmean'].transpose(1,0,2).shape))
-        #    AWC = np.array(AWC).transpose(1,0,2)
-        #    AWC = xr.DataArray(AWC, coords=[y, x, times], dims=['y', 'x', 't'])
-
         print('Interpolating AWC onto common grid')
         AWC = AWC.interp({AWCx: interpdata[interpx], AWCy: interpdata[interpy]}, kwargs={"fill_value": None})
         if not AWCx==interpx:
@@ -274,7 +248,7 @@ def load_driving_data(basedatasetname, times,
             AWC = country_subset_shapefile(data=AWC, sfname=sfname, IDname='ADMIN', IDs=countries,
                                            xname=interpx, yname=interpy, drop=False)
 
-    if crop=='wheat':
+    if crop=='wheat' or crop=='OSR':
         AWC = AWC.transpose(interpy, interpx, 't')
         alldata['AWC'] = AWC.values#.transpose(1,0,2)
         #print(alldata['AWC'].shape)
@@ -284,12 +258,6 @@ def load_driving_data(basedatasetname, times,
         pCO2.set_index('YEAR', inplace=True)
         cconc = pCO2.loc[int(times[0][:4])].values[0]
         alldata['cconc'] = cconc
-        
-    # mask data to where we have AWC values
-    #print(data)
-    #print(AWC)
-    #if crop=='wheat':
-    #    data = data.where(AWC > 0)
 
 
     print('Done')
@@ -589,6 +557,13 @@ def getnames(basedatasetname, precipname, radname, crop):
             xnames = ['projection_x_coordinate']
             ynames = ['projection_y_coordinate']
             tnames = ['time']
+        elif crop == 'OSR':
+            fnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
+            vnames = fnames
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['projection_x_coordinate']
+            ynames = ['projection_y_coordinate']
+            tnames = ['time']
     elif basedatasetname == 'era5':
         if crop == 'grass':
             fnames = ['total_precipitation', 'maximum_2m_temperature_since_previous_post_processing',
@@ -601,6 +576,15 @@ def getnames(basedatasetname, precipname, radname, crop):
             ynames = ['latitude']
             tnames = ['time']
         elif crop == 'wheat':
+            fnames = ['total_precipitation', 'maximum_2m_temperature_since_previous_post_processing',
+                      'minimum_2m_temperature_since_previous_post_processing', 'surface_net_solar_radiation',
+                      '2m_temperature']
+            vnames = ['tp' ,'mx2t', 'mn2t', 'ssr', 't2m']
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['longitude']
+            ynames = ['latitude']
+            tnames = ['time']
+        elif crop == 'OSR':
             fnames = ['total_precipitation', 'maximum_2m_temperature_since_previous_post_processing',
                       'minimum_2m_temperature_since_previous_post_processing', 'surface_net_solar_radiation',
                       '2m_temperature']
@@ -624,8 +608,22 @@ def getnames(basedatasetname, precipname, radname, crop):
             xnames = ['x']
             ynames = ['y']
             tnames = ['time']
+        elif crop == 'OSR':
+            fnames = ["pr", "tasmax", "tasmin", "rss", "tas"]
+            vnames = ['pr', 'tasmax', 'tasmin', 'rss', 'tas']
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['x']
+            ynames = ['y']
+            tnames = ['time']
     elif basedatasetname == 'chess_and_haduk':
         if crop == 'wheat':
+            fnames = ['precip', 'tasmax', 'tasmin', 'netsolar', 'tasmean']
+            vnames = fnames
+            dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
+            xnames = ['x']
+            ynames = ['y']
+            tnames = ['time']
+        elif crop == 'OSR':
             fnames = ['precip', 'tasmax', 'tasmin', 'netsolar', 'tasmean']
             vnames = fnames
             dnames = ['prec', 'tmax', 'tmin', 'solarrad', 'tmean']
