@@ -146,8 +146,8 @@ elif basedatasetname == 'era5':
 elif basedatasetname == 'chess_and_haduk':
     insubfolder = 'chess_and_haduk/**/*.nc'
     outsubfolder = 'chess_and_haduk'
-    dataloc = os.path.join(datalocbase, insubfolder
-    outloc = os.path.join(outlocbase, outsubfolder))
+    dataloc = os.path.join(datalocbase, insubfolder)
+    outloc = os.path.join(outlocbase, outsubfolder)
 
 print('################## RUN INFO ###################')
 print('Crop: ' + crop)
