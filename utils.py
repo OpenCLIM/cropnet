@@ -542,6 +542,9 @@ def getnames(basedatasetname, precipname, radname, crop):
     in the lists corresponds to the same variable, the second items to another etc. 
     '''
     
+    basedatasetname = basedatasetname.split('_')[0]
+    print('basedatasetname for getnames function: ' + basedatasetname)
+
     if basedatasetname == 'ukcp18':
         if crop == 'grass':
             fnames = ["pr", "tasmax", "tasmin", "hurs", "rss", "sfcWind", "tas"]
@@ -593,7 +596,7 @@ def getnames(basedatasetname, precipname, radname, crop):
             xnames = ['longitude']
             ynames = ['latitude']
             tnames = ['time']
-    elif basedatasetname == 'ukcp18bc':
+    elif basedatasetname == 'chess-scape':
         if crop == 'grass':
             fnames = ["pr", "tasmax", "tasmin", "hurs", "rss", "sfcWind", "tas"]
             vnames = fnames
