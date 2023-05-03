@@ -47,9 +47,9 @@ return(AWC)
 
 
 # Set growth model function
-osr_py <- function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T,
+osr_py <-function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T, lats,
                    cconc = NULL, Tbase = 4.5, GAItab = NULL, HarvestJday = 212,
-                   k = 0.75, datasetname = 'ukcp18bc', precipname = 'None',
+                   k = 0.75, datasetname = 'ukcp18', precipname = 'None',
                    radname = 'None', FCO2 = TRUE){
   
   if (datasetname %in% "ukcp18") {
@@ -66,7 +66,7 @@ osr_py <- function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T,
       print('Solar rad: W/m^2')
     }
   }
-  if (datasetname %in% "ukcp18bc") {
+  if (grepl("chess-scape", datasetname, fixed=TRUE)) {
     print('Using UKCP18 1km (CHESS-SCAPE) data, units:')
     print('Temperature: Converting from Kelvin to Celsius')
     tmean <- tmean - 273.15                                             
@@ -124,6 +124,8 @@ osr_py <- function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T,
     }
   }
   
+  ukgrid <- "+init=epsg:27700"
+  latlong <- "+init=epsg:4326"
     
   ## Degree of vernalisiton
   ## Vernalisation rate (unit increase per day)
@@ -144,15 +146,18 @@ osr_py <- function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T,
   ## Photoperiod ------------- 
 
   ## Julian days
-  Jday <- as.POSIXlt(strptime(dimnames(tmean)[[3]], format = "%Y%m%d"))$yday + 1
+  dates <- paste(substr(T,1,4),substr(T,5,6), substr(T,7,8),sep = "-")
+  Jday <- as.POSIXlt(strptime(T, format = "%Y%m%d"))$yday + 1
   
   ## Day length
   DL <- sapply(Jday, function(d) daylength(lats, d), simplify = "array")
-  
+  print(dim(DL))
+    
   ## Photoperiod factor
   Pbase <- 5.7
   Pmax <- 14.8
-  Pf <- ifelse(DL > Pbase, ifelse(DL < Pmax, (DL-Pbase) / (Pmax - Pbase),1), 0) 
+  Pf <- ifelse(DL > Pbase, ifelse(DL < Pmax, (DL-Pbase) / (Pmax - Pbase),1), 0)
+  print(dim(Pf))
   Pf <- aperm(apply(Pf, 1:2, function(x){
         x[which(is.na(x))] <- (x[(min(which(is.na(x)))-1)] + x[(max(which(is.na(x)))+1)])/2
         return(x)
@@ -292,7 +297,8 @@ osr_py <- function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T,
   tmax_s2  <- ifelse(devStage > 2 & devStage <3, tmax, tmax-tmax)
   ## Calculate HDDs with baseline temp of 29.5C
   HDD <- ifelse(tmin_s2 > 29.5, ((tmin_s2 + tmax_s2)/2) -29.5,
-         ifelse(tmax_s2 < 29.5, 0,                                                                        ifelse(tmax_s2 >= 29.5, (((29.5 + tmax_s2)/2) -29.5) * ((tmax_s2-29.5)/(tmax_s2-tmin_s2)), 999)))
+         ifelse(tmax_s2 < 29.5, 0,
+         ifelse(tmax_s2 >= 29.5, (((29.5 + tmax_s2)/2) -29.5) * ((tmax_s2-29.5)/(tmax_s2-tmin_s2)), 999)))
 
   print('Heat degree days dimensions:')
   print(dim(HDD))

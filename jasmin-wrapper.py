@@ -54,17 +54,17 @@ startmonth=int(sys.argv[5])
 startday=1
 
 if CO2 == '8.5':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_01.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP85_01.csv')
 elif CO2 == '8.5_01':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_01.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP85_01.csv')
 elif CO2 == '8.5_04':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_04.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP85_04.csv')
 elif CO2 == '8.5_06':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_06.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP85_06.csv')
 elif CO2 == '8.5_15':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP85_15.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP85_15.csv')
 elif CO2 == '2.6':
-    CO2file = os.path.join(CO2filesloc, 'UKCP18_CO2_RCP26.csv')
+    CO2file = os.path.join(CO2filesloc, 'CHESS-SCAPE_RCP26.csv')
 else:
     print('Unrecognised or no CO2 option specified, running without CO2 fertilisation')
     CO2file = 'None'
@@ -273,7 +273,7 @@ for year in years:
         FCO2 = False
     
     # Convert these to lon,lat
-    if crop == 'wheat':
+    if crop == 'wheat' or crop == 'OSR':
         proj = pyproj.Transformer.from_crs(27700, 4326, always_xy=True)
         xx,yy = np.meshgrid(x,y)
         try:
@@ -356,8 +356,8 @@ for year in years:
         yieldfunc = r['osr_py']
         print('Running OSR model, calculating yield')
         datalist2 = yieldfunc(tmean, tmax, tmin, prec, solarrad, 
-                              AWC, x, y, t, cconc, datasetname = basedatasetname, 
-                              FCO2=FCO2)
+                              AWC, x, y, t, lats, cconc, 
+                              datasetname = basedatasetname, FCO2=FCO2)
         WUyield = np.array(datalist2.rx2('WUyield'))
         WLyield = np.array(datalist2.rx2('WLyield'))
         WLHLyield = np.array(datalist2.rx2('WLHLyield'))
