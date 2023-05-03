@@ -197,7 +197,7 @@ osr_py <-function(tmean, tmax, tmin, prec, solarrad, AWC, X, Y, T, lats,
   
   ## Residual light 
   Klai <- 0.75
-  PAR <- temp_rss*(0.0036*24)/0.5
+  PAR <- solarrad*(0.0036*24)/0.5
   # Green canopy reflectance
   REFg <- ifelse(devStage < 2, 0.046, ifelse(devStage > 3, 0.072, 0))
   # Flowering canopy transmission
