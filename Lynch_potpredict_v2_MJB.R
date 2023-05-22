@@ -760,7 +760,7 @@ wheat_yield <- function(GAI, tmean, tmin, tmax, prec, solarrad, AWC, Jarray, Cda
           WUyield <- (WUyield/1.15 - wloss) * 1.15
         }
 	HDD <-  ifelse(tmin > 30, ((tmin + tmax)/2) -30,
-	    	ifelse(tmax < 30, 0,                                                                                                              ifelse(tmax >= 30, (((30 + tmax)/2) -30) * ((tmax-30)/(tmax-tmin)), 999)))
+	    	ifelse(tmax < 30, 0,                                                                           ifelse(tmax >= 30, (((30 + tmax)/2) -30) * ((tmax-30)/(tmax-tmin)), 999)))
 
         #HDD <- ifelse(tmin > 30, tmin-30,
         #              ifelse(tmax < 30, 0,

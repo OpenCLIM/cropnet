@@ -77,65 +77,65 @@ if basedatasetname == 'ukcp18':
 elif basedatasetname == 'chess-scape_8.5_01':
     insubfolder = 'chess-scape/rcp85/01/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp85_noCO2/01'
+        outsubfolder = crop + '/chess-scape/rcp85_noCO2/01'
     else:
-        outsubfolder = crop + 'chess-scape/rcp85/01'
+        outsubfolder = crop + '/chess-scape/rcp85/01'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_8.5_04':
     insubfolder = 'chess-scape/rcp85/04/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp85_noCO2/04'
+        outsubfolder = crop + '/chess-scape/rcp85_noCO2/04'
     else:
-        outsubfolder = crop + 'chess-scape/rcp85/04'
+        outsubfolder = crop + '/chess-scape/rcp85/04'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_8.5_06':
     insubfolder = 'chess-scape/rcp85/06/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp85_noCO2/06'
+        outsubfolder = crop + '/chess-scape/rcp85_noCO2/06'
     else:
-        outsubfolder = crop + 'chess-scape/rcp85/06'
+        outsubfolder = crop + '/chess-scape/rcp85/06'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_8.5_15':
     insubfolder = 'chess-scape/rcp85/15/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp85_noCO2/15'
+        outsubfolder = crop + '/chess-scape/rcp85_noCO2/15'
     else:
-        outsubfolder = crop + 'chess-scape/rcp85/15'
+        outsubfolder = crop + '/chess-scape/rcp85/15'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_2.6_01':
     insubfolder = 'chess-scape/rcp26/01/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp26_noCO2/01'
+        outsubfolder = crop + '/chess-scape/rcp26_noCO2/01'
     else:
-        outsubfolder = crop + 'chess-scape/rcp26/01'
+        outsubfolder = crop + '/chess-scape/rcp26/01'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_2.6_04':
     insubfolder = 'chess-scape/rcp26/04/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp26_noCO2/04'
+        outsubfolder = crop + '/chess-scape/rcp26_noCO2/04'
     else:
-        outsubfolder = crop + 'chess-scape/rcp26/04'
+        outsubfolder = crop + '/chess-scape/rcp26/04'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_2.6_06':
     insubfolder = 'chess-scape/rcp26/06/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp26_noCO2/06'
+        outsubfolder = crop + '/chess-scape/rcp26_noCO2/06'
     else:
-        outsubfolder = crop + 'chess-scape/rcp26/06'
+        outsubfolder = crop + '/chess-scape/rcp26/06'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'chess-scape_2.6_15':
     insubfolder = 'chess-scape/rcp26/15/**/*.nc'
     if CO2file == 'None':
-        outsubfolder = crop + 'chess-scape/rcp26_noCO2/15'
+        outsubfolder = crop + '/chess-scape/rcp26_noCO2/15'
     else:
-        outsubfolder = crop + 'chess-scape/rcp26/15'
+        outsubfolder = crop + '/chess-scape/rcp26/15'
     dataloc = os.path.join(datalocbase, insubfolder)
     outloc = os.path.join(outlocbase, outsubfolder)
 elif basedatasetname == 'era5':
@@ -267,6 +267,7 @@ for year in years:
     FCO2 = True
     try:
         cconc = dd['cconc']
+        print('CO2 concentration: ' + str(cconc))
     except KeyError:
         print('CO2 fertilisation disabled')
         cconc = 0
@@ -354,29 +355,46 @@ for year in years:
 
     elif crop == 'OSR':
         yieldfunc = r['osr_py']
-        print('Running OSR model, calculating yield')
+        print('Any tmean NaNs?:')
+        print(np.any(np.isnan(tmean)))
+        print('All NaNs?:')
+        print(np.all(np.isnan(tmean)))
         datalist2 = yieldfunc(tmean, tmax, tmin, prec, solarrad, 
-                              AWC, x, y, t, lats, cconc, 
+                              AWC, x, y, t, lats, cconc = cconc, 
                               datasetname = basedatasetname, FCO2=FCO2)
         WUyield = np.array(datalist2.rx2('WUyield'))
         WLyield = np.array(datalist2.rx2('WLyield'))
         WLHLyield = np.array(datalist2.rx2('WLHLyield'))
         WUHLyield = np.array(datalist2.rx2('WUHLyield'))
+        HDD = np.array(datalist2.rx2('HDD'))
+        CHDD = np.array(datalist2.rx2('CHDD'))
+        devStage = np.array(datalist2.rx2('devStage'))
         WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
         WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
         WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
         WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
+        HDDxr = xr.DataArray(HDD, [y, x, t], ['y', 'x', 't'])
+        CHDDxr = xr.DataArray(CHDD, [y, x], ['y', 'x'])
+        devStagexr = xr.DataArray(devStage, [y, x, t], ['y', 'x', 't'])
         WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
         WLyieldxr.name = 'water_limited_potential_wheat_yield'
         WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
         WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
+        HDDxr.name = 'OSR_heating_degree_days'
+        CHDDxr.name = 'OSR_cumulative_heating_degree_days'
+        devStagexr.name = 'crop_development_stage'
         enddatestr = fnenddate.strftime('%b%d')
         WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        HDDname   = 'UK_HDD_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        CHDDname   = 'UK_CHDD_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+        devStagename = 'UK_devStage_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
         WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
         WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
         WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
-    
+        HDDxr.to_netcdf(os.path.join(outloc, HDDname))
+        CHDDxr.to_netcdf(os.path.join(outloc, CHDDname))
+        devStagexr.to_netcdf(os.path.join(outloc, devStagename))
