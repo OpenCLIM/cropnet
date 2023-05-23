@@ -17,18 +17,21 @@ numpy2ri.activate()
 Wrapper to run the CropNet crop models on the JASMIN LOTUS HPC cluster
 
 Input options:
-datalocbase - Location of all the meteorological driving data files. 
-              With subfolders within for the different rcp/ensmem permutations.
-outlocbase -- Where to store the final yield outputs of the model. Subfolders based
-              on the crop, ensmem and basedataset will be created under here.
-AWCrast ----- File path of the available water content file as a geotiff raster or netcdf file.
-CO2filesloc - Location of the folder containing the CO2 concentrations files as csv files with two columns,
-              the year and the CO2 conc in ppm. Set to 'None' (including quotes) to 
-              disable the CO2 fertlisation option.
-simx -------- Only used if basedatasetname is 'ukcp18'. Ignored otherwise. Identifies the
-              ensemble member to use by selecting out the driving data files with the 
-              specified simx in the their name
-crop -------- Crop to model. Can be 'wheat', 'grass' or 'OSR'
+datalocbase ----- Location of all the meteorological driving data files. 
+                  With subfolders within for the different rcp/ensmem permutations.
+outlocbase ------ Where to store the final yield outputs of the model. Subfolders based
+                  on the crop, ensmem and basedataset will be created under here.
+AWCrast --------- File path of the available water content file as a geotiff raster or netcdf file.
+CO2filesloc ----- Location of the folder containing the CO2 concentrations files as csv files with two columns,
+                  the year and the CO2 conc in ppm. Set to 'None' (including quotes) to 
+                  disable the CO2 fertlisation option.
+simx ------------ Only used if basedatasetname is 'ukcp18'. Ignored otherwise. Identifies the
+                  ensemble member to use by selecting out the driving data files with the 
+                  specified simx in the their name
+crop ------------ Crop to model. Can be 'wheat', 'grass' or 'OSR'
+output_biomass -- Whether or not to output the crop biomass evolution in addition to the yields.
+                  This significantly increases the disk size of the output as it is a 3D variable
+                  (time, y, x). Can be True or False.
 basedatasetname - Which driving dataset to use, along with possible rcp and ensmem identifiers.
                   This is used to determine the file and variable names to look for in the 
                   data read-in routine. These can be configured if necessary by editing the 'getnames' function directly.
@@ -48,6 +51,7 @@ crop= sys.argv[1] # 'wheat', 'grass' or 'OSR'
 basedatasetname = sys.argv[2] 
 # 'ukcp18', 'chess-scape_8.5_01', 'chess-scape_8.5_04', 'chess-scape_8.5_06', 'chess-scape_8.5_15', 
 # 'chess-scape_2.6_01', 'chess-scape_2.6_04', 'chess-scape_2.6_06', 'chess-scape_2.6_15', 'era5', 'chess_and_haduk'
+output_biomass = False # True or False
 
 startyear=int(sys.argv[4])
 startmonth=int(sys.argv[5])
@@ -281,14 +285,16 @@ for year in years:
             lons,lats = proj.transform(xx, yy, errcheck=True)
         except pyproj.exceptions.ProjError:
             lons,lats = proj.transform(xx, yy, errcheck=True)
-    
+
+
+    # run crop models
     if crop == 'grass':
         grassfunc = r['grass_py']
         print('Running grass model')
         if basedatasetname == 'era5':
             datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
-                                 x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
-                                 elevfile=elevfile, sfcP=sfcP)
+                                 x, y, t, datasetname = basedatasetname, cconc=cconc, 
+                                 FCO2=FCO2, elevfile=elevfile, sfcP=sfcP)
         else:
             datalist = grassfunc(tmean, tmax, tmin, prec, solarrad, tdp, wind,
                                  x, y, t, basedatasetname, cconc=cconc, FCO2=FCO2, 
@@ -303,15 +309,16 @@ for year in years:
         
         outfile = os.path.join(outloc, 'yields_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
         outputsave(YaSum, [y, x], ['y', 'x'], endyear, 'yield', 'tn/hc', outfile)
-        outfile = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
-        outputsave(Ya.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Actual_yield', 'tn/hc', outfile)
-        outfile = os.path.join(outloc, 'Yp_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
-        outputsave(Yp.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Potential_yield', 'tn/hc', outfile)
+        if output_biomass:
+            outfile = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+            outputsave(Ya.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Actual_yield', 'tn/hc', outfile)
+            outfile = os.path.join(outloc, 'Yp_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+            outputsave(Yp.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Potential_yield', 'tn/hc', outfile)
     
     elif crop == 'wheat':
         GAIfunc = r['GAI']
         print('Running model, calculating GAI')
-        datalist = GAIfunc(tmean, tmax, tmin, prec, solarrad, x, y, t, lats, basedatasetname)
+        datalist = GAIfunc(tmean, tmax, tmin, prec, solarrad, x, y, t, lats, datasetname = basedatasetname)
         GAI = np.array(datalist.rx2('GAI'))
         tmean       = np.array(datalist.rx2('tmean'))
         tmin        = np.array(datalist.rx2('tmin'))
@@ -352,7 +359,17 @@ for year in years:
         WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
         WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
         WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
-
+        if output_biomass:
+            WU_Biomass = np.array(datalist2.rx2('WU_Biomass'))
+            WL_Biomass = np.array(datalist2.rx2('WL_Biomass'))
+            WU_Biomassxr = xr.DataArray(WU_Biomass, [y, x, t], ['y', 'x', 't'])
+            WL_Biomassxr = xr.DataArray(WL_Biomass, [y, x, t], ['y', 'x', 't'])
+            WU_Biomassxr.name = 'water_unlimited_biomass'
+            WL_Biomassxr.name = 'water_limited_biomass'
+            WU_Biomassname = 'UK_WUbiomass_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+            WL_Biomassname = 'UK_WLbiomass_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+            WU_Biomassxr.to_netcdf(os.path.join(outloc, WU_Biomassname))
+            WL_Biomassxr.to_netcdf(os.path.join(outloc, WL_Biomassname))
     elif crop == 'OSR':
         yieldfunc = r['osr_py']
         print('Any tmean NaNs?:')
@@ -398,3 +415,14 @@ for year in years:
         HDDxr.to_netcdf(os.path.join(outloc, HDDname))
         CHDDxr.to_netcdf(os.path.join(outloc, CHDDname))
         devStagexr.to_netcdf(os.path.join(outloc, devStagename))
+        if output_biomass:
+            WU_Biomass = np.array(datalist2.rx2('WU_Biomass'))
+            WL_Biomass = np.array(datalist2.rx2('WL_Biomass'))
+            WU_Biomassxr = xr.DataArray(WU_Biomass, [y, x, t], ['y', 'x', 't'])
+            WL_Biomassxr = xr.DataArray(WL_Biomass, [y, x, t], ['y', 'x', 't'])
+            WU_Biomassxr.name = 'water_unlimited_biomass'
+            WL_Biomassxr.name = 'water_limited_biomass'
+            WU_Biomassname = 'UK_WUbiomass_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+            WL_Biomassname = 'UK_WLbiomass_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
+            WU_Biomassxr.to_netcdf(os.path.join(outloc, WU_Biomassname))
+            WL_Biomassxr.to_netcdf(os.path.join(outloc, WL_Biomassname))
