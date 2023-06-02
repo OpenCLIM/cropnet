@@ -43,8 +43,8 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
     }
   }
 
-  if (datasetname %in% "ukcp18bc") {
-    print('Using UKCP18 Bias Corrected (CHESS-SCAPE) data, units:')
+  if (grepl("chess-scape", datasetname, fixed=TRUE)) {
+    print('Using UKCP18 1km (CHESS-SCAPE) data, units:')
     print('Temperature: Converting from Kelvin to Celsius')
     Tt <- Tt - 273.15                                             
     Ttmx <- Ttmx - 273.15
@@ -56,12 +56,9 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
       prec <- prec*86400
     }
     if (grepl('ceres', radname, fixed=TRUE)) {
-      print('Using ceres for solar rad')
-      print('Converting rad units from W/m^2 --> MJ/m^2/day')
-      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+      print('Using ceres for solar rad, units W/m^2')
     } else {
-      print('Converting rad units from W/m^2 --> MJ/m^2/day')
-      Rr <- Rr*0.0036*24 ## W/m^2 --> MJ/m^2/day
+      print('Solar rad: W/m^2')
     }
   }
 
@@ -114,7 +111,6 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
     elev <- raster(elevfile)
     elevs <- matrix(extract(elev,  dat_SP, fun = mean, na.rm = TRUE), c(dim(X), dim(Y)))
     elevs <- t(elevs)
-    print(elevs)
   }
   ##print(dim(elevs))
   ## Get julian days
