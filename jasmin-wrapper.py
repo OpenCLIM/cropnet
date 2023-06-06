@@ -383,38 +383,23 @@ for year in years:
         WLyield = np.array(datalist2.rx2('WLyield'))
         WLHLyield = np.array(datalist2.rx2('WLHLyield'))
         WUHLyield = np.array(datalist2.rx2('WUHLyield'))
-        HDD = np.array(datalist2.rx2('HDD'))
-        CHDD = np.array(datalist2.rx2('CHDD'))
-        devStage = np.array(datalist2.rx2('devStage'))
         WUyieldxr = xr.DataArray(WUyield, [y, x], ['y', 'x'])
         WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
         WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
         WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
-        HDDxr = xr.DataArray(HDD, [y, x, t], ['y', 'x', 't'])
-        CHDDxr = xr.DataArray(CHDD, [y, x], ['y', 'x'])
-        devStagexr = xr.DataArray(devStage, [y, x, t], ['y', 'x', 't'])
         WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
         WLyieldxr.name = 'water_limited_potential_wheat_yield'
         WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
         WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
-        HDDxr.name = 'OSR_heating_degree_days'
-        CHDDxr.name = 'OSR_cumulative_heating_degree_days'
-        devStagexr.name = 'crop_development_stage'
         enddatestr = fnenddate.strftime('%b%d')
         WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WUHLyieldname = 'UK_WUHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WLHLyieldname = 'UK_WLHLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-        HDDname   = 'UK_HDD_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-        CHDDname   = 'UK_CHDD_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
-        devStagename = 'UK_devStage_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WUyieldxr.to_netcdf(os.path.join(outloc, WUyieldname))
         WLyieldxr.to_netcdf(os.path.join(outloc, WLyieldname))
         WUHLyieldxr.to_netcdf(os.path.join(outloc, WUHLyieldname))
         WLHLyieldxr.to_netcdf(os.path.join(outloc, WLHLyieldname))
-        HDDxr.to_netcdf(os.path.join(outloc, HDDname))
-        CHDDxr.to_netcdf(os.path.join(outloc, CHDDname))
-        devStagexr.to_netcdf(os.path.join(outloc, devStagename))
         if output_biomass:
             WU_Biomass = np.array(datalist2.rx2('WU_Biomass'))
             WL_Biomass = np.array(datalist2.rx2('WL_Biomass'))
