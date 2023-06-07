@@ -387,10 +387,10 @@ for year in years:
         WLyieldxr = xr.DataArray(WLyield, [y, x], ['y', 'x'])
         WUHLyieldxr = xr.DataArray(WUHLyield, [y, x], ['y', 'x'])
         WLHLyieldxr = xr.DataArray(WLHLyield, [y, x], ['y', 'x'])
-        WUyieldxr.name = 'water_unlimited_potential_wheat_yield'
-        WLyieldxr.name = 'water_limited_potential_wheat_yield'
-        WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_wheat_yield'
-        WLHLyieldxr.name = 'water_limited_heat_stressed_potential_wheat_yield'
+        WUyieldxr.name = 'water_unlimited_potential_OSR_yield'
+        WLyieldxr.name = 'water_limited_potential_OSR_yield'
+        WUHLyieldxr.name = 'water_unlimited_heat_stressed_potential_OSR_yield'
+        WLHLyieldxr.name = 'water_limited_heat_stressed_potential_OSR_yield'
         enddatestr = fnenddate.strftime('%b%d')
         WUyieldname   = 'UK_WUpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
         WLyieldname   = 'UK_WLpotyield_' + basedatasetname + '_' + enddatestr + '_' + str(endyear) + '.nc'
