@@ -196,7 +196,8 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
 
   ## Total yield per year (convert to T per Ha) 
   YaSum <- apply(Ya, 1:2, sum, na.rm = T)/1000
-
+  YpSum <- apply(Yp, 1:2, sum, na.rm = T)/1000
+    
   ## Convert final yield to raster
   #WLPY = list()
   #WLPY$x= X
@@ -208,7 +209,7 @@ grass_py <- function(Tt, Ttmx, Ttmn, prec, Rr,  rh, wind, X, Y, T, datasetname='
   ##if(is.null(savepath) == FALSE){
   ##  writeRaster(WLPYrast, savepath,"GTiff", overwrite = TRUE)
   ##}
-  datalist <- list('PET'=PET, 'AET'=AET, 'SMD'=SMD, 'Yp'=Yp, 'Ya'=Ya, 'YaSum'=YaSum)
+  datalist <- list('PET'=PET, 'AET'=AET, 'SMD'=SMD, 'Yp'=Yp, 'Ya'=Ya, 'YaSum'=YaSum, 'YpSum'=YpSum)
   return(datalist)
 }
 

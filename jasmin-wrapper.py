@@ -307,8 +307,10 @@ for year in years:
         Ya  = np.array(datalist.rx2('Ya'))
         YaSum = np.array(datalist.rx2('YaSum'))
         
-        outfile = os.path.join(outloc, 'yields_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
-        outputsave(YaSum, [y, x], ['y', 'x'], endyear, 'yield', 'tn/hc', outfile)
+        outfile1 = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
+        outfile2 = os.path.join(outloc, 'Yp_grass_' + basedatasetname + '_' + str(endyear) + '.nc')        
+        outputsave(YaSum, [y, x], ['y', 'x'], endyear, 'actual_yield', 'tn/hc', outfile1)
+        outputsave(YpSum, [y, x], ['y', 'x'], endyear, 'potential_yield', 'tn/hc', outfile2)        
         if output_biomass:
             outfile = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
             outputsave(Ya.transpose(2,0,1), [t, y, x], ['t', 'y', 'x'], endyear, 'Actual_yield', 'tn/hc', outfile)
