@@ -305,6 +305,7 @@ for year in years:
         SMD = np.array(datalist.rx2('SMD'))
         Yp  = np.array(datalist.rx2('Yp'))
         Ya  = np.array(datalist.rx2('Ya'))
+        YpSum = np.array(datalist.rx2('YpSum'))
         YaSum = np.array(datalist.rx2('YaSum'))
         
         outfile1 = os.path.join(outloc, 'Ya_grass_' + basedatasetname + '_' + str(endyear) + '.nc')
